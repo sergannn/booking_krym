@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../auth/auth_controller.dart';
 import '../auth/login_screen.dart';
 import '../seller/seller_home.dart';
+import '../admin/admin_home.dart';
 
 class AppShell extends ConsumerWidget {
   const AppShell({super.key});
@@ -40,31 +41,14 @@ class AppShell extends ConsumerWidget {
         if (user == null) {
           return const LoginScreen();
         }
-        switch (user.role.toLowerCase()) {
-          case 'seller':
-          case 'partner':
-          case 'partnerseller':
-            return SellerHomePage(user: user);
-          default:
-            return const _WorkInProgressScreen();
+        final normalizedRole = user.role.trim().toLowerCase();
+        final isAdmin = normalizedRole.contains('admin') || user.roleId == 1;
+        if (isAdmin) {
+          return AdminHomePage(user: user);
         }
+        return SellerHomePage(user: user);
       },
     );
   }
 }
 
-class _WorkInProgressScreen extends StatelessWidget {
-  const _WorkInProgressScreen();
-
-  @override
-  Widget build(BuildContext context) {
-    return const Scaffold(
-      body: Center(
-        child: Padding(
-          padding: EdgeInsets.all(24),
-          child: Text('Раздел в разработке. Пожалуйста, авторизуйтесь продавцом.'),
-        ),
-      ),
-    );
-  }
-}

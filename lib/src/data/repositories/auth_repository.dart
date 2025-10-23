@@ -1,44 +1,64 @@
-import 'package:collection/collection.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-
-import '../local_database.dart';
-import '../models.dart';
+import '../../core/api/api_client.dart';
+import '../../core/api/api_exception.dart';
+import '../../core/api/api_helpers.dart';
+import '../models/user.dart';
 
 class AuthRepository {
-  AuthRepository(this._database);
+  AuthRepository(this._client);
 
-  final LocalDatabase _database;
+  final ApiClient _client;
 
-  static const _userKey = 'current_user_id';
+  User? _cachedUser;
 
-  Future<UserProfile?> loadPersistedUser() async {
-    final prefs = await SharedPreferences.getInstance();
-    final userId = prefs.getString(_userKey);
-    if (userId == null || userId.isEmpty) {
+  Future<User?> loadPersistedUser() async {
+    final token = await _client.readStoredToken();
+    if (token == null || token.isEmpty) {
       return null;
     }
-    return _database.usersBox.get(userId);
+    return fetchCurrentUser();
   }
 
-  Future<UserProfile?> signIn(String login, String password) async {
-    final users = _database.usersBox.values;
-    final matched = users.firstWhereOrNull(
-      (user) => user.login == login.trim() && user.password == password.trim(),
-    );
-    if (matched == null) {
-      return null;
+  Future<User?> signIn(String email, String password) async {
+    try {
+      final response = await _client.postJson('/api/auth/login', body: {
+        'email': email.trim(),
+        'password': password.trim(),
+      });
+      final token = response['token'] as String?;
+      final userJson = response['user'] as Map<String, dynamic>?;
+      if (token == null || userJson == null) {
+        return null;
+      }
+      await _client.storeToken(token);
+      _cachedUser = User.fromJson(userJson);
+      return _cachedUser;
+    } on ApiException {
+      rethrow;
     }
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_userKey, matched.id);
-    return matched;
   }
 
   Future<void> signOut() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_userKey);
+    try {
+      await _client.post('/api/auth/logout', authenticated: true);
+    } catch (_) {
+      // ignore network errors on logout
+    }
+    await _client.clearToken();
+    _cachedUser = null;
   }
 
-  Future<UserProfile?> refreshUser(String userId) async {
-    return _database.usersBox.get(userId);
+  Future<User?> fetchCurrentUser() async {
+    try {
+      final response = await _client.getJson('/api/auth/me', authenticated: true);
+      final userJson = response['user'] as Map<String, dynamic>?;
+      if (userJson == null) {
+        return null;
+      }
+      _cachedUser = User.fromJson(userJson);
+      return _cachedUser;
+    } on ApiException catch (_) {
+      await _client.clearToken();
+      return null;
+    }
   }
 }

@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../data/providers.dart';
-import '../../data/models.dart';
 import '../auth/auth_controller.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
@@ -14,13 +12,13 @@ class LoginScreen extends ConsumerStatefulWidget {
 
 class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _loginController = TextEditingController();
+  final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _submitting = false;
 
   @override
   void dispose() {
-    _loginController.dispose();
+    _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
   }
@@ -35,12 +33,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     setState(() => _submitting = true);
     final controller = ref.read(authControllerProvider.notifier);
     final success = await controller.signIn(
-      _loginController.text,
+      _emailController.text,
       _passwordController.text,
     );
     if (!success && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Неверный логин или пароль')),
+        const SnackBar(content: Text('Не удалось войти. Проверьте данные.')),
       );
     }
     if (mounted) {
@@ -50,7 +48,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final users = ref.watch(usersProvider);
     final theme = Theme.of(context);
     return Scaffold(
       body: Center(
@@ -72,15 +69,19 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     ),
                     const SizedBox(height: 16),
                     TextFormField(
-                      controller: _loginController,
+                      controller: _emailController,
                       decoration: const InputDecoration(
-                        labelText: 'Логин',
-                        hintText: 'Введите логин',
+                        labelText: 'Email',
+                        hintText: 'Введите email',
                       ),
+                      keyboardType: TextInputType.emailAddress,
                       textInputAction: TextInputAction.next,
                       validator: (value) {
                         if (value == null || value.trim().isEmpty) {
-                          return 'Укажите логин';
+                          return 'Укажите email';
+                        }
+                        if (!value.contains('@')) {
+                          return 'Укажите корректный email';
                         }
                         return null;
                       },
@@ -116,23 +117,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                             : const Text('Войти'),
                       ),
                     ),
-                    if (users.isNotEmpty) ...[
-                      const SizedBox(height: 16),
-                      Text(
-                        'Доступные аккаунты (демо):',
-                        style: theme.textTheme.labelLarge,
-                      ),
-                      const SizedBox(height: 8),
-                      for (final user in users)
-                        ListTile(
-                          dense: true,
-                          contentPadding: EdgeInsets.zero,
-                          title: Text(user.displayName),
-                          subtitle: Text(
-                              'Логин: ${user.login}, пароль: ${user.password}'),
-                          trailing: Text(_roleLabel(user.role)),
-                        ),
-                    ]
                   ],
                 ),
               ),
@@ -141,20 +125,5 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         ),
       ),
     );
-  }
-
-  String _roleLabel(UserRole role) {
-    switch (role) {
-      case UserRole.admin:
-        return 'Администратор';
-      case UserRole.seller:
-        return 'Продавец';
-      case UserRole.partnerSeller:
-        return 'Продавец-партнер';
-      case UserRole.driver:
-        return 'Водитель';
-      case UserRole.guide:
-        return 'Экскурсовод';
-    }
   }
 }

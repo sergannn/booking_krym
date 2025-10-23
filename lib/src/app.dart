@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'data/local_database.dart';
+import 'core/api/api_client.dart';
+import 'core/app_config.dart';
+import 'core/storage/token_storage.dart';
 import 'features/common/app_shell.dart';
 
 class BookingAppBootstrap {
@@ -10,7 +12,11 @@ class BookingAppBootstrap {
     if (_initialized) {
       return;
     }
-    await LocalDatabase.instance.bootstrap();
+    await TokenStorage.instance.init();
+    ApiClient.instance.configure(
+      baseUrl: AppConfig.apiBaseUrl,
+      tokenProvider: TokenStorage.instance,
+    );
     _initialized = true;
   }
 }

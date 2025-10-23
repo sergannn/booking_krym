@@ -1,19 +1,25 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'local_database.dart';
-import 'models.dart';
+import '../core/api/api_client.dart';
 import 'repositories/auth_repository.dart';
+import 'repositories/excursions_repository.dart';
+import 'repositories/bookings_repository.dart';
 
-final localDatabaseProvider = Provider<LocalDatabase>((ref) {
-  return LocalDatabase.instance;
+final apiClientProvider = Provider<ApiClient>((ref) {
+  return ApiClient.instance;
 });
 
 final authRepositoryProvider = Provider<AuthRepository>((ref) {
-  final db = ref.watch(localDatabaseProvider);
-  return AuthRepository(db);
+  final client = ref.watch(apiClientProvider);
+  return AuthRepository(client);
 });
 
-final usersProvider = Provider<List<UserProfile>>((ref) {
-  final db = ref.watch(localDatabaseProvider);
-  return db.usersBox.values.toList();
+final excursionsRepositoryProvider = Provider<ExcursionsRepository>((ref) {
+  final client = ref.watch(apiClientProvider);
+  return ExcursionsRepository(client);
+});
+
+final bookingsRepositoryProvider = Provider<BookingsRepository>((ref) {
+  final client = ref.watch(apiClientProvider);
+  return BookingsRepository(client);
 });

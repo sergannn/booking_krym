@@ -1,16 +1,16 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../data/models.dart';
 import '../../data/providers.dart';
 import '../../data/repositories/auth_repository.dart';
+import '../../data/models/user.dart';
 
 final authControllerProvider =
-    StateNotifierProvider<AuthController, AsyncValue<UserProfile?>>((ref) {
+    StateNotifierProvider<AuthController, AsyncValue<User?>>((ref) {
   final repository = ref.watch(authRepositoryProvider);
   return AuthController(repository);
 });
 
-class AuthController extends StateNotifier<AsyncValue<UserProfile?>> {
+class AuthController extends StateNotifier<AsyncValue<User?>> {
   AuthController(this._repository) : super(const AsyncValue.loading()) {
     _restore();
   }
@@ -26,10 +26,10 @@ class AuthController extends StateNotifier<AsyncValue<UserProfile?>> {
     }
   }
 
-  Future<bool> signIn(String login, String password) async {
+  Future<bool> signIn(String email, String password) async {
     state = const AsyncValue.loading();
     try {
-      final user = await _repository.signIn(login, password);
+      final user = await _repository.signIn(email, password);
       if (user == null) {
         state = const AsyncValue.data(null);
         return false;
@@ -53,7 +53,7 @@ class AuthController extends StateNotifier<AsyncValue<UserProfile?>> {
       return;
     }
     try {
-      final updated = await _repository.refreshUser(current.id);
+      final updated = await _repository.fetchCurrentUser();
       state = AsyncValue.data(updated ?? current);
     } catch (error, stackTrace) {
       state = AsyncValue.error(error, stackTrace);

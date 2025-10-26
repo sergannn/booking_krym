@@ -1,6 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/api/api_client.dart';
+import 'models/booking.dart';
+import 'models/excursion.dart';
 import 'repositories/auth_repository.dart';
 import 'repositories/excursions_repository.dart';
 import 'repositories/bookings_repository.dart';
@@ -22,4 +24,14 @@ final excursionsRepositoryProvider = Provider<ExcursionsRepository>((ref) {
 final bookingsRepositoryProvider = Provider<BookingsRepository>((ref) {
   final client = ref.watch(apiClientProvider);
   return BookingsRepository(client);
+});
+
+final excursionsFutureProvider = FutureProvider<List<Excursion>>((ref) {
+  final repository = ref.watch(excursionsRepositoryProvider);
+  return repository.fetchExcursions();
+});
+
+final bookingsFutureProvider = FutureProvider<List<BookingGroup>>((ref) {
+  final repository = ref.watch(bookingsRepositoryProvider);
+  return repository.fetchBookings();
 });

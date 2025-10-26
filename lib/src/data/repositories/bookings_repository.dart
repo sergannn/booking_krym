@@ -7,24 +7,15 @@ class BookingsRepository {
 
   final ApiClient _client;
 
-  Future<List<BookingItem>> fetchBookings() async {
+  Future<List<BookingGroup>> fetchBookings() async {
     final response = await _client.getJson('/api/bookings', authenticated: true);
     final data = response['data'] as Map<String, dynamic>?;
     if (data == null) {
       return const [];
     }
-    final items = <BookingItem>[];
-    for (final entry in data.entries) {
-      final seats = (entry.value['seats'] as List<dynamic>? ?? const [])
-          .cast<Map<String, dynamic>>();
-      for (final seat in seats) {
-        items.add(BookingItem.fromJson({
-          ...seat,
-          'excursion': entry.value['excursion'] as Map<String, dynamic>,
-        }));
-      }
-    }
-    return items;
+    return data.entries
+        .map((entry) => BookingGroup.fromJson(entry))
+        .toList();
   }
 
   Future<BookingResponse> bookSeats({

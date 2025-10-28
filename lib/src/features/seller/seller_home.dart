@@ -102,7 +102,7 @@ class _ExcursionsTab extends ConsumerWidget {
               final date = sortedDates[index];
               final dayItems = groups[date]!;
               return _ExcursionDaySection(
-                date: DateFormat('EEEE, dd MMMM', 'ru_RU').format(date),
+                date: DateFormat('EEEE, dd MMMM yyyy', 'ru_RU').format(date),
                 excursions: dayItems,
                 formatter: formatter,
               );

@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../data/models/user_summary.dart';
 import '../../../data/providers.dart';
 import '../../../core/api/api_exception.dart';
+import 'staff_wallet_sheet.dart';
 
 class UsersTab extends ConsumerStatefulWidget {
   const UsersTab({super.key});
@@ -16,6 +17,7 @@ class UsersTab extends ConsumerStatefulWidget {
 
 class _UsersTabState extends ConsumerState<UsersTab> {
   final _searchController = TextEditingController();
+  String _query = '';
 
   @override
   void dispose() {
@@ -41,9 +43,7 @@ class _UsersTabState extends ConsumerState<UsersTab> {
                     labelText: 'Поиск по имени или email',
                     prefixIcon: Icon(Icons.search),
                   ),
-                  onChanged: (value) {
-                    // пока просто инвалидация по требованию
-                  },
+                  onChanged: (value) => setState(() => _query = value),
                 ),
               ),
               const SizedBox(width: 12),
@@ -75,7 +75,16 @@ class _UsersTabState extends ConsumerState<UsersTab> {
               loading: () => const Center(child: CircularProgressIndicator()),
               error: (error, _) => _UsersError(message: '$error'),
               data: (users) {
-                if (users.isEmpty) {
+                final filtered = users.where((user) {
+                  if (_query.trim().isEmpty) {
+                    return true;
+                  }
+                  final q = _query.toLowerCase();
+                  return user.name.toLowerCase().contains(q) ||
+                      user.email.toLowerCase().contains(q);
+                }).toList();
+
+                if (filtered.isEmpty) {
                   return const Center(
                     child: Text('Сотрудников пока нет'),
                   );
@@ -87,10 +96,10 @@ class _UsersTabState extends ConsumerState<UsersTab> {
                     await ref.read(allUsersFutureProvider.future);
                   },
                   child: ListView.separated(
-                    itemCount: users.length,
+                    itemCount: filtered.length,
                     separatorBuilder: (_, __) => const Divider(height: 1),
                     itemBuilder: (context, index) {
-                      final user = users[index];
+                      final user = filtered[index];
                       return ListTile(
                         leading: CircleAvatar(
                           child: Text(user.name.isNotEmpty
@@ -99,7 +108,13 @@ class _UsersTabState extends ConsumerState<UsersTab> {
                         ),
                         title: Text(user.name),
                         subtitle: Text('${user.email} • ${user.roleName}'),
-                        trailing: Text('ID ${user.id}'),
+                        trailing: user.balance > 0
+                            ? Text(
+                                '${user.balance.toStringAsFixed(2)} ₽',
+                                style: const TextStyle(color: Colors.green),
+                              )
+                            : null,
+                        onTap: () => _openWallet(context, user),
                       );
                     },
                   ),
@@ -109,6 +124,15 @@ class _UsersTabState extends ConsumerState<UsersTab> {
           ),
         ],
       ),
+    );
+  }
+
+  Future<void> _openWallet(BuildContext context, UserSummary user) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => StaffWalletSheet(user: user),
     );
   }
 }
@@ -182,10 +206,9 @@ class _CreateUserDialogState extends ConsumerState<_CreateUserDialog> {
                 controller: _nameController,
                 decoration: const InputDecoration(labelText: 'Имя и инициалы'),
                 textInputAction: TextInputAction.next,
-                validator: (value) =>
-                    value == null || value.trim().length < 2
-                        ? 'Введите имя'
-                        : null,
+                validator: (value) => value == null || value.trim().length < 2
+                    ? 'Введите имя'
+                    : null,
               ),
               const SizedBox(height: 12),
               TextFormField(
@@ -197,8 +220,7 @@ class _CreateUserDialogState extends ConsumerState<_CreateUserDialog> {
                   if (value == null || value.trim().isEmpty) {
                     return 'Введите email';
                   }
-                  final emailRegex =
-                      RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
+                  final emailRegex = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
                   if (!emailRegex.hasMatch(value.trim())) {
                     return 'Некорректный email';
                   }

@@ -5,9 +5,12 @@ import 'package:intl/intl.dart';
 
 import '../../data/models/excursion.dart';
 import '../../data/models/user.dart';
+import '../../data/models/booking.dart';
+import '../../data/repositories/bookings_repository.dart';
 import '../../data/providers.dart';
 import '../auth/auth_controller.dart';
 import 'widgets/users_tab.dart';
+import 'widgets/assign_staff_sheet.dart';
 
 class AdminHomePage extends StatelessWidget {
   const AdminHomePage({super.key, required this.user});
@@ -144,14 +147,14 @@ class _AdminBookingTab extends ConsumerWidget {
                         child: ExpansionTile(
                           title: Text(group.excursion.title),
                           subtitle: Text(
-                            '${subFormatter.format(group.excursion.dateTime)} • ${group.seats.length} мест',
+                            '${subFormatter.format(group.excursion.dateTime)} • ${group.bookings.length} мест',
                           ),
-                          children: group.seats
+                          children: group.bookings
                               .map(
-                                (seat) => ListTile(
-                                  title: Text('Место ${seat.seatNumber}'),
+                                (booking) => ListTile(
+                                  title: Text('Место ${booking.seat.seatNumber}'),
                                   subtitle: Text(
-                                    'Бронировано: ${subFormatter.format(seat.bookedAt)}',
+                                    'Бронировано: ${subFormatter.format(booking.bookedAt)}',
                                   ),
                                   trailing: IconButton(
                                     icon: const Icon(Icons.cancel),
@@ -159,7 +162,7 @@ class _AdminBookingTab extends ConsumerWidget {
                                     onPressed: () => _cancelBooking(
                                       context,
                                       ref,
-                                      seat.id,
+                                      booking.id,
                                     ),
                                   ),
                                 ),
@@ -222,6 +225,26 @@ class _AdminExcursionCard extends ConsumerWidget {
             Text('Цена: ${excursion.price.toStringAsFixed(2)} ₽'),
             Text(
                 'Свободно мест: ${excursion.availableSeatsCount} / ${excursion.maxSeats}'),
+            if (excursion.assignedStaff.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: excursion.assignedStaff
+                    .map(
+                      (staff) => Chip(
+                        avatar: Icon(
+                          staff.roleInExcursion == 'driver'
+                              ? Icons.directions_bus
+                              : Icons.record_voice_over,
+                          size: 16,
+                        ),
+                        label: Text(staff.name),
+                      ),
+                    )
+                    .toList(),
+              ),
+            ],
             if (excursion.description.isNotEmpty) ...[
               const SizedBox(height: 12),
               Text(excursion.description),
@@ -241,6 +264,12 @@ class _AdminExcursionCard extends ConsumerWidget {
                   onPressed: excursion.busSeats.isEmpty
                       ? null
                       : () => _showSeatSheet(context),
+                ),
+                const SizedBox(width: 12),
+                OutlinedButton.icon(
+                  icon: const Icon(Icons.group_add),
+                  label: const Text('Назначить персонал'),
+                  onPressed: () => _assignStaff(context, ref),
                 ),
               ],
             ),
@@ -269,8 +298,15 @@ class _AdminExcursionCard extends ConsumerWidget {
 
     try {
       final response = await ref.read(bookingsRepositoryProvider).bookSeats(
-            excursionId: excursion.id,
-            seatNumbers: seats,
+            BookSeatPayload(
+              excursionId: excursion.id,
+              seatNumbers: seats,
+              price: excursion.price,
+              customerName: 'Посетитель',
+              customerPhone: '',
+              passengerType: PassengerType.adult,
+              stopId: 1,
+            ),
           );
       messenger.showSnackBar(
         SnackBar(
@@ -364,6 +400,18 @@ class _AdminExcursionCard extends ConsumerWidget {
       ),
     );
   }
+
+  Future<void> _assignStaff(BuildContext context, WidgetRef ref) async {
+    final result = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (dialogContext) => AssignStaffSheet(excursion: excursion),
+    );
+    if (result == true) {
+      ref.invalidate(excursionsFutureProvider);
+    }
+  }
 }
 
 class _AdminWalletTab extends ConsumerWidget {
@@ -378,24 +426,11 @@ class _AdminWalletTab extends ConsumerWidget {
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (error, _) => Center(child: Text('Не удалось загрузить: $error')),
       data: (groups) {
-        final entries = <_WalletEntry>[];
-        double total = 0;
-        for (final group in groups) {
-          final price = group.excursion.price;
-          for (final seat in group.seats) {
-            total += price;
-            entries.add(
-              _WalletEntry(
-                excursionTitle: group.excursion.title,
-                excursionDateTime: group.excursion.dateTime,
-                seatNumber: seat.seatNumber,
-                amount: price,
-                bookedAt: seat.bookedAt,
-              ),
-            );
-          }
-        }
-        entries.sort((a, b) => b.bookedAt.compareTo(a.bookedAt));
+        final bookings = groups
+            .expand((group) => group.bookings)
+            .toList()
+          ..sort((a, b) => b.bookedAt.compareTo(a.bookedAt));
+        final total = bookings.fold<double>(0, (sum, item) => sum + item.price);
 
         return Padding(
           padding: const EdgeInsets.all(16),
@@ -419,20 +454,20 @@ class _AdminWalletTab extends ConsumerWidget {
               ),
               const SizedBox(height: 8),
               Expanded(
-                child: entries.isEmpty
+                child: bookings.isEmpty
                     ? const Center(child: Text('Продаж пока нет'))
                     : ListView.separated(
-                        itemCount: entries.length,
+                        itemCount: bookings.length,
                         separatorBuilder: (_, __) => const Divider(height: 1),
                         itemBuilder: (context, index) {
-                          final entry = entries[index];
+                          final entry = bookings[index];
                           return ListTile(
-                            title: Text(entry.excursionTitle),
+                            title: Text(entry.excursion.title),
                             subtitle: Text(
-                              '${formatter.format(entry.excursionDateTime)} • Место ${entry.seatNumber}',
+                              '${formatter.format(entry.excursion.dateTime)} • Место ${entry.seat.seatNumber}',
                             ),
                             trailing:
-                                Text('${entry.amount.toStringAsFixed(2)} ₽'),
+                                Text('${entry.price.toStringAsFixed(2)} ₽'),
                           );
                         },
                       ),
@@ -445,21 +480,6 @@ class _AdminWalletTab extends ConsumerWidget {
   }
 }
 
-class _WalletEntry {
-  const _WalletEntry({
-    required this.excursionTitle,
-    required this.excursionDateTime,
-    required this.seatNumber,
-    required this.amount,
-    required this.bookedAt,
-  });
-
-  final String excursionTitle;
-  final DateTime excursionDateTime;
-  final int seatNumber;
-  final double amount;
-  final DateTime bookedAt;
-}
 
 class _PlaceholderTab extends StatelessWidget {
   const _PlaceholderTab({required this.message});

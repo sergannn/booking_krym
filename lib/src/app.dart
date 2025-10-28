@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/date_symbol_data_local.dart';
+
 import 'core/api/api_client.dart';
 import 'core/app_config.dart';
 import 'core/storage/token_storage.dart';
@@ -12,6 +14,7 @@ class BookingAppBootstrap {
     if (_initialized) {
       return;
     }
+    await initializeDateFormatting('ru_RU');
     await TokenStorage.instance.init();
     ApiClient.instance.configure(
       baseUrl: AppConfig.apiBaseUrl,

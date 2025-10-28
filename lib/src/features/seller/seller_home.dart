@@ -4,6 +4,9 @@ import 'package:intl/intl.dart';
 
 import '../../data/models/user.dart';
 import '../../data/models/excursion.dart';
+import '../../data/models/booking.dart';
+import '../../data/repositories/bookings_repository.dart';
+import '../seller/widgets/booking_dialog.dart';
 import '../../data/providers.dart';
 import '../auth/auth_controller.dart';
 
@@ -69,14 +72,23 @@ class _ExcursionsTab extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final excursionsAsync = ref.watch(excursionsFutureProvider);
-    final formatter = DateFormat('dd.MM.yyyy HH:mm');
+    final formatter = DateFormat('HH:mm');
 
     return excursionsAsync.when(
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (error, _) => _ErrorMessage(message: '$error'),
       data: (items) {
-        if (items.isEmpty) {
+        final upcoming =
+            items.where((excursion) => !excursion.isPast).toList();
+        if (upcoming.isEmpty) {
           return const Center(child: Text('Нет доступных экскурсий'));
+        }
+        upcoming.sort((a, b) => a.dateTime.compareTo(b.dateTime));
+        final groups = <DateTime, List<Excursion>>{};
+        for (final excursion in upcoming) {
+          final key = DateTime(excursion.date.year, excursion.date.month,
+              excursion.date.day);
+          groups.putIfAbsent(key, () => []).add(excursion);
         }
         return RefreshIndicator(
           onRefresh: () async {
@@ -85,12 +97,51 @@ class _ExcursionsTab extends ConsumerWidget {
           },
           child: ListView.builder(
             padding: const EdgeInsets.all(16),
-            itemCount: items.length,
-            itemBuilder: (context, index) =>
-                _ExcursionTile(excursion: items[index], formatter: formatter),
+            itemCount: groups.length,
+            itemBuilder: (context, index) {
+              final date = groups.keys.elementAt(index);
+              final dayItems = groups[date]!;
+              return _ExcursionDaySection(
+                date: DateFormat('EEEE, dd MMMM', 'ru_RU').format(date),
+                excursions: dayItems,
+                formatter: formatter,
+              );
+            },
           ),
         );
       },
+    );
+  }
+}
+
+class _ExcursionDaySection extends StatelessWidget {
+  const _ExcursionDaySection({
+    required this.date,
+    required this.excursions,
+    required this.formatter,
+  });
+
+  final String date;
+  final List<Excursion> excursions;
+  final DateFormat formatter;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          date,
+          style: Theme.of(context)
+              .textTheme
+              .titleMedium
+              ?.copyWith(fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 12),
+        for (final excursion in excursions)
+          _ExcursionTile(excursion: excursion, formatter: formatter),
+        const SizedBox(height: 24),
+      ],
     );
   }
 }
@@ -110,13 +161,31 @@ class _ExcursionTile extends ConsumerWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(excursion.title,
-                style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: 8),
-            Text('Дата: ${formatter.format(excursion.dateTime)}'),
-            Text('Цена: ${excursion.price.toStringAsFixed(2)} ₽'),
             Text(
-                'Свободно мест: ${excursion.availableSeatsCount} / ${excursion.maxSeats}'),
+              '${formatter.format(excursion.dateTime)} — ${excursion.title}',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            if (excursion.description.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text(
+                  excursion.description,
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Text('Цена: ${excursion.price.toStringAsFixed(2)} ₽'),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Text(
+                    'Свободно ${excursion.availableSeatsCount} из ${excursion.maxSeats}',
+                    textAlign: TextAlign.end,
+                  ),
+                ),
+              ],
+            ),
             const SizedBox(height: 12),
             Row(
               children: [
@@ -142,28 +211,29 @@ class _ExcursionTile extends ConsumerWidget {
   }
 
   Future<void> _book(BuildContext context, WidgetRef ref) async {
-    final seats = await _promptSeatNumbers(context);
-    if (seats == null) {
-      return;
-    }
-    // После диалога проверяем, что текущий BuildContext всё ещё активен
-    if (!context.mounted) {
+    final stopsAsync = await ref.read(stopsFutureProvider.future);
+    final result = await showDialog<BookingDialogResult>(
+      context: context,
+      builder: (context) => BookingDialog(stops: stopsAsync),
+    );
+
+    if (result == null) {
       return;
     }
 
     final messenger = ScaffoldMessenger.of(context);
-    if (seats.isEmpty) {
-      messenger.showSnackBar(
-        const SnackBar(content: Text('Введите номера мест через запятую.')),
-      );
-      return;
-    }
 
     try {
-      // ref.read(...) — обращение к провайдеру Riverpod, чтобы вызвать API бронирований
       final response = await ref.read(bookingsRepositoryProvider).bookSeats(
-            excursionId: excursion.id,
-            seatNumbers: seats,
+            BookSeatPayload(
+              excursionId: excursion.id,
+              seatNumbers: result.seatNumbers,
+              price: result.price,
+              customerName: result.customerName,
+              customerPhone: result.customerPhone,
+              passengerType: result.passengerType,
+              stopId: result.stopId,
+            ),
           );
       messenger.showSnackBar(
         SnackBar(
@@ -181,47 +251,6 @@ class _ExcursionTile extends ConsumerWidget {
         SnackBar(content: Text('Ошибка бронирования: $error')),
       );
     }
-  }
-
-  Future<List<int>?> _promptSeatNumbers(BuildContext context) async {
-    final result = await showDialog<String>(
-      context: context,
-      builder: (dialogContext) {
-        final controller = TextEditingController();
-        return AlertDialog(
-          title: const Text('Бронирование мест'),
-          content: TextField(
-            controller: controller,
-            keyboardType: TextInputType.number,
-            decoration: const InputDecoration(
-              labelText: 'Номера мест',
-              hintText: 'Например: 3,7,11',
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(null),
-              child: const Text('Отмена'),
-            ),
-            FilledButton(
-              onPressed: () =>
-                  Navigator.of(dialogContext).pop(controller.text.trim()),
-              child: const Text('Забронировать'),
-            ),
-          ],
-        );
-      },
-    );
-
-    if (result == null) {
-      return null;
-    }
-
-    return result
-        .split(',')
-        .map((value) => int.tryParse(value.trim()))
-        .whereType<int>()
-        .toList();
   }
 
   Future<void> _showSeatSheet(BuildContext context) {
@@ -289,18 +318,19 @@ class _BookingsTab extends ConsumerWidget {
                 child: ExpansionTile(
                   title: Text(group.excursion.title),
                   subtitle: Text(
-                    '${formatter.format(group.excursion.dateTime)} • ${group.seats.length} мест',
+                    '${formatter.format(group.excursion.dateTime)} • ${group.bookings.length} мест',
                   ),
-                  children: group.seats
+                  children: group.bookings
                       .map(
-                        (seat) => ListTile(
-                          title: Text('Место ${seat.seatNumber}'),
+                        (booking) => ListTile(
+                          title: Text('Место ${booking.seat.seatNumber}'),
                           subtitle: Text(
-                              'Бронировано: ${formatter.format(seat.bookedAt)}'),
+                              'Бронировано: ${formatter.format(booking.bookedAt)}'),
                           trailing: IconButton(
                             icon: const Icon(Icons.cancel),
                             tooltip: 'Отменить',
-                            onPressed: () => _cancel(context, ref, seat.id),
+                            onPressed: () =>
+                                _cancel(context, ref, booking.id),
                           ),
                         ),
                       )
@@ -372,24 +402,14 @@ class _SellerWalletTab extends ConsumerWidget {
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (error, _) => _ErrorMessage(message: '$error'),
       data: (groups) {
-        final entries = <_WalletEntry>[];
-        double total = 0;
-        for (final group in groups) {
-          final price = group.excursion.price;
-          for (final seat in group.seats) {
-            total += price;
-            entries.add(
-              _WalletEntry(
-                excursionTitle: group.excursion.title,
-                excursionDateTime: group.excursion.dateTime,
-                seatNumber: seat.seatNumber,
-                amount: price,
-                bookedAt: seat.bookedAt,
-              ),
-            );
-          }
-        }
-        entries.sort((a, b) => b.bookedAt.compareTo(a.bookedAt));
+        final bookings = groups
+            .expand((group) => group.bookings)
+            .toList()
+          ..sort((a, b) => b.bookedAt.compareTo(a.bookedAt));
+        final total = bookings.fold<double>(
+          0,
+          (sum, item) => sum + item.price,
+        );
 
         return Padding(
           padding: const EdgeInsets.all(16),
@@ -413,20 +433,21 @@ class _SellerWalletTab extends ConsumerWidget {
               ),
               const SizedBox(height: 8),
               Expanded(
-                child: entries.isEmpty
+                child: bookings.isEmpty
                     ? const Center(child: Text('Продаж пока нет'))
                     : ListView.separated(
-                        itemCount: entries.length,
+                        itemCount: bookings.length,
                         separatorBuilder: (_, __) => const Divider(height: 1),
                         itemBuilder: (context, index) {
-                          final entry = entries[index];
+                          final entry = bookings[index];
                           return ListTile(
-                            title: Text(entry.excursionTitle),
+                            title: Text(entry.excursion.title),
                             subtitle: Text(
-                              '${formatter.format(entry.excursionDateTime)} • Место ${entry.seatNumber}',
+                              '${formatter.format(entry.excursion.dateTime)} • Место ${entry.seat.seatNumber}',
                             ),
-                            trailing:
-                                Text('${entry.amount.toStringAsFixed(2)} ₽'),
+                            trailing: Text(
+                              '${entry.price.toStringAsFixed(2)} ₽',
+                            ),
                           );
                         },
                       ),
@@ -437,20 +458,4 @@ class _SellerWalletTab extends ConsumerWidget {
       },
     );
   }
-}
-
-class _WalletEntry {
-  const _WalletEntry({
-    required this.excursionTitle,
-    required this.excursionDateTime,
-    required this.seatNumber,
-    required this.amount,
-    required this.bookedAt,
-  });
-
-  final String excursionTitle;
-  final DateTime excursionDateTime;
-  final int seatNumber;
-  final double amount;
-  final DateTime bookedAt;
 }

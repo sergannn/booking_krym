@@ -4,7 +4,6 @@ import 'package:intl/intl.dart';
 
 import '../../data/models/user.dart';
 import '../../data/models/excursion.dart';
-import '../../data/models/booking.dart';
 import '../../data/repositories/bookings_repository.dart';
 import '../seller/widgets/booking_dialog.dart';
 import '../../data/providers.dart';
@@ -86,10 +85,11 @@ class _ExcursionsTab extends ConsumerWidget {
         upcoming.sort((a, b) => a.dateTime.compareTo(b.dateTime));
         final groups = <DateTime, List<Excursion>>{};
         for (final excursion in upcoming) {
-          final key = DateTime(excursion.date.year, excursion.date.month,
-              excursion.date.day);
+          final key = DateTime(excursion.dateTime.year, excursion.dateTime.month,
+              excursion.dateTime.day);
           groups.putIfAbsent(key, () => []).add(excursion);
         }
+        final sortedDates = groups.keys.toList()..sort();
         return RefreshIndicator(
           onRefresh: () async {
             ref.invalidate(excursionsFutureProvider);
@@ -97,9 +97,9 @@ class _ExcursionsTab extends ConsumerWidget {
           },
           child: ListView.builder(
             padding: const EdgeInsets.all(16),
-            itemCount: groups.length,
+            itemCount: sortedDates.length,
             itemBuilder: (context, index) {
-              final date = groups.keys.elementAt(index);
+              final date = sortedDates[index];
               final dayItems = groups[date]!;
               return _ExcursionDaySection(
                 date: DateFormat('EEEE, dd MMMM', 'ru_RU').format(date),

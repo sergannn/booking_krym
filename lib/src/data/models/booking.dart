@@ -39,10 +39,14 @@ class BookingExcursion {
 
   factory BookingExcursion.fromJson(Map<String, dynamic> json) {
     final dateTime = DateTime.parse(json['date_time'] as String);
+    // Создаем date в том же часовом поясе, что и dateTime
+    final date = DateTime(dateTime.year, dateTime.month, dateTime.day, 
+        dateTime.hour, dateTime.minute, dateTime.second, dateTime.millisecond, 
+        dateTime.microsecond);
     return BookingExcursion(
       id: json['id'] as int,
       title: json['title'] as String,
-      date: DateTime.tryParse(json['date'] as String? ?? '') ?? dateTime,
+      date: date,
       time: json['time'] as String? ?? '',
       dateTime: dateTime,
       price: double.parse(json['price'].toString()),

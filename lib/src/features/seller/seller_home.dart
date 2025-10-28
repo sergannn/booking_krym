@@ -24,6 +24,7 @@ class _SellerHomePageState extends ConsumerState<SellerHomePage> {
     final pages = [
       const _ExcursionsTab(),
       const _BookingsTab(),
+      const _SellerWalletTab(),
     ];
 
     return Scaffold(
@@ -52,7 +53,10 @@ class _SellerHomePageState extends ConsumerState<SellerHomePage> {
         onDestinationSelected: (value) => setState(() => _currentIndex = value),
         destinations: const [
           NavigationDestination(icon: Icon(Icons.map), label: 'Экскурсии'),
-          NavigationDestination(icon: Icon(Icons.event_seat), label: 'Бронирования'),
+          NavigationDestination(
+              icon: Icon(Icons.event_seat), label: 'Бронирования'),
+          NavigationDestination(
+              icon: Icon(Icons.account_balance_wallet), label: 'Кошелёк'),
         ],
       ),
     );
@@ -106,11 +110,13 @@ class _ExcursionTile extends ConsumerWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(excursion.title, style: Theme.of(context).textTheme.titleMedium),
+            Text(excursion.title,
+                style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 8),
             Text('Дата: ${formatter.format(excursion.dateTime)}'),
             Text('Цена: ${excursion.price.toStringAsFixed(2)} ₽'),
-            Text('Свободно мест: ${excursion.availableSeatsCount} / ${excursion.maxSeats}'),
+            Text(
+                'Свободно мест: ${excursion.availableSeatsCount} / ${excursion.maxSeats}'),
             const SizedBox(height: 12),
             Row(
               children: [
@@ -289,7 +295,8 @@ class _BookingsTab extends ConsumerWidget {
                       .map(
                         (seat) => ListTile(
                           title: Text('Место ${seat.seatNumber}'),
-                          subtitle: Text('Бронировано: ${formatter.format(seat.bookedAt)}'),
+                          subtitle: Text(
+                              'Бронировано: ${formatter.format(seat.bookedAt)}'),
                           trailing: IconButton(
                             icon: const Icon(Icons.cancel),
                             tooltip: 'Отменить',
@@ -307,7 +314,8 @@ class _BookingsTab extends ConsumerWidget {
     );
   }
 
-  Future<void> _cancel(BuildContext context, WidgetRef ref, int bookingId) async {
+  Future<void> _cancel(
+      BuildContext context, WidgetRef ref, int bookingId) async {
     final messenger = ScaffoldMessenger.of(context);
     try {
       await ref.read(bookingsRepositoryProvider).cancelBooking(bookingId);
@@ -350,4 +358,99 @@ class _ErrorMessage extends StatelessWidget {
       ),
     );
   }
+}
+
+class _SellerWalletTab extends ConsumerWidget {
+  const _SellerWalletTab();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final bookingsAsync = ref.watch(bookingsFutureProvider);
+    final formatter = DateFormat('dd.MM.yyyy HH:mm');
+
+    return bookingsAsync.when(
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (error, _) => _ErrorMessage(message: '$error'),
+      data: (groups) {
+        final entries = <_WalletEntry>[];
+        double total = 0;
+        for (final group in groups) {
+          final price = group.excursion.price;
+          for (final seat in group.seats) {
+            total += price;
+            entries.add(
+              _WalletEntry(
+                excursionTitle: group.excursion.title,
+                excursionDateTime: group.excursion.dateTime,
+                seatNumber: seat.seatNumber,
+                amount: price,
+                bookedAt: seat.bookedAt,
+              ),
+            );
+          }
+        }
+        entries.sort((a, b) => b.bookedAt.compareTo(a.bookedAt));
+
+        return Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Card(
+                child: ListTile(
+                  title: const Text('Баланс'),
+                  subtitle: const Text('Сумма подтверждённых продаж'),
+                  trailing: Text(
+                    '${total.toStringAsFixed(2)} ₽',
+                    style: Theme.of(context).textTheme.headlineSmall,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'История продаж',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              const SizedBox(height: 8),
+              Expanded(
+                child: entries.isEmpty
+                    ? const Center(child: Text('Продаж пока нет'))
+                    : ListView.separated(
+                        itemCount: entries.length,
+                        separatorBuilder: (_, __) => const Divider(height: 1),
+                        itemBuilder: (context, index) {
+                          final entry = entries[index];
+                          return ListTile(
+                            title: Text(entry.excursionTitle),
+                            subtitle: Text(
+                              '${formatter.format(entry.excursionDateTime)} • Место ${entry.seatNumber}',
+                            ),
+                            trailing:
+                                Text('${entry.amount.toStringAsFixed(2)} ₽'),
+                          );
+                        },
+                      ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _WalletEntry {
+  const _WalletEntry({
+    required this.excursionTitle,
+    required this.excursionDateTime,
+    required this.seatNumber,
+    required this.amount,
+    required this.bookedAt,
+  });
+
+  final String excursionTitle;
+  final DateTime excursionDateTime;
+  final int seatNumber;
+  final double amount;
+  final DateTime bookedAt;
 }

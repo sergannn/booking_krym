@@ -7,6 +7,7 @@ import '../../data/models/excursion.dart';
 import '../../data/models/user.dart';
 import '../../data/providers.dart';
 import '../auth/auth_controller.dart';
+import 'widgets/users_tab.dart';
 
 class AdminHomePage extends StatelessWidget {
   const AdminHomePage({super.key, required this.user});
@@ -16,11 +17,32 @@ class AdminHomePage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
-      length: 3,
+      length: 6,
       child: Scaffold(
         appBar: AppBar(
           title: Text('Администратор — ${user.name}'),
           actions: [
+            Consumer(
+              builder: (context, ref, _) => IconButton(
+                icon: const Icon(Icons.add),
+                tooltip: 'Добавить экскурсию',
+                onPressed: () async {
+                  final created = await showDialog<Excursion>(
+                    context: context,
+                    builder: (dialogContext) => const _CreateExcursionDialog(),
+                  );
+                  if (created == null || !context.mounted) {
+                    return;
+                  }
+                  ref.invalidate(excursionsFutureProvider);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Экскурсия "${created.title}" добавлена'),
+                    ),
+                  );
+                },
+              ),
+            ),
             Consumer(
               builder: (context, ref, _) => IconButton(
                 icon: const Icon(Icons.logout),
@@ -32,17 +54,23 @@ class AdminHomePage extends StatelessWidget {
           ],
           bottom: const TabBar(
             tabs: [
-              Tab(text: 'Экскурсии'),
               Tab(text: 'Бронирование'),
+              Tab(text: 'Кошелёк'),
               Tab(text: 'Статистика'),
+              Tab(text: 'Расписание'),
+              Tab(text: 'Сотрудники'),
+              Tab(text: 'Цены'),
             ],
           ),
         ),
         body: const TabBarView(
           children: [
-            _ExcursionsTab(),
-            _ActionsTab(),
-            _StatsTab(),
+            _AdminBookingTab(),
+            _AdminWalletTab(),
+            _PlaceholderTab(message: 'Статистика в разработке'),
+            _PlaceholderTab(message: 'Расписание в разработке'),
+            const UsersTab(),
+            _PlaceholderTab(message: 'Цены в разработке'),
           ],
         ),
       ),
@@ -50,31 +78,366 @@ class AdminHomePage extends StatelessWidget {
   }
 }
 
-class _ExcursionsTab extends ConsumerWidget {
-  const _ExcursionsTab();
+class _AdminBookingTab extends ConsumerWidget {
+  const _AdminBookingTab();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final formatter = DateFormat('dd.MM.yyyy • HH:mm');
     final excursionsAsync = ref.watch(excursionsFutureProvider);
+    final bookingsAsync = ref.watch(bookingsFutureProvider);
+    final formatter = DateFormat('dd.MM.yyyy • HH:mm');
 
     return excursionsAsync.when(
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (error, _) => Center(child: Text('Не удалось загрузить: $error')),
-      data: (items) {
-        if (items.isEmpty) {
-          return const Center(child: Text('Экскурсии отсутствуют'));
-        }
+      data: (excursions) {
         return RefreshIndicator(
           onRefresh: () async {
             ref.invalidate(excursionsFutureProvider);
-            await ref.read(excursionsFutureProvider.future);
+            ref.invalidate(bookingsFutureProvider);
+            await Future.wait([
+              ref.read(excursionsFutureProvider.future),
+              ref.read(bookingsFutureProvider.future),
+            ]);
           },
-          child: ListView.builder(
+          child: ListView(
             padding: const EdgeInsets.all(16),
-            itemCount: items.length,
-            itemBuilder: (context, index) => _AdminExcursionTile(
-                excursion: items[index], formatter: formatter),
+            children: [
+              if (excursions.isEmpty)
+                const Center(child: Text('Экскурсии отсутствуют'))
+              else ...[
+                for (final excursion in excursions)
+                  _AdminExcursionCard(
+                    key: ValueKey('admin-excursion-${excursion.id}'),
+                    excursion: excursion,
+                    formatter: formatter,
+                  ),
+              ],
+              const SizedBox(height: 24),
+              Text(
+                'Мои бронирования',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              const SizedBox(height: 8),
+              bookingsAsync.when(
+                loading: () => const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 24),
+                  child: Center(child: CircularProgressIndicator()),
+                ),
+                error: (error, _) => Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  child: Text('Не удалось загрузить бронирования: $error'),
+                ),
+                data: (groups) {
+                  if (groups.isEmpty) {
+                    return const Text('Нет активных бронирований');
+                  }
+                  return ListView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: groups.length,
+                    itemBuilder: (context, index) {
+                      final group = groups[index];
+                      final subFormatter = DateFormat('dd.MM.yyyy HH:mm');
+                      return Card(
+                        margin: const EdgeInsets.only(bottom: 12),
+                        child: ExpansionTile(
+                          title: Text(group.excursion.title),
+                          subtitle: Text(
+                            '${subFormatter.format(group.excursion.dateTime)} • ${group.seats.length} мест',
+                          ),
+                          children: group.seats
+                              .map(
+                                (seat) => ListTile(
+                                  title: Text('Место ${seat.seatNumber}'),
+                                  subtitle: Text(
+                                    'Бронировано: ${subFormatter.format(seat.bookedAt)}',
+                                  ),
+                                  trailing: IconButton(
+                                    icon: const Icon(Icons.cancel),
+                                    tooltip: 'Отменить',
+                                    onPressed: () => _cancelBooking(
+                                      context,
+                                      ref,
+                                      seat.id,
+                                    ),
+                                  ),
+                                ),
+                              )
+                              .toList(),
+                        ),
+                      );
+                    },
+                  );
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _cancelBooking(
+    BuildContext context,
+    WidgetRef ref,
+    int bookingId,
+  ) async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await ref.read(bookingsRepositoryProvider).cancelBooking(bookingId);
+      ref.invalidate(bookingsFutureProvider);
+      ref.invalidate(excursionsFutureProvider);
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Бронирование отменено')),
+      );
+    } catch (error) {
+      messenger.showSnackBar(
+        SnackBar(content: Text('Не удалось отменить: $error')),
+      );
+    }
+  }
+}
+
+class _AdminExcursionCard extends ConsumerWidget {
+  const _AdminExcursionCard(
+      {super.key, required this.excursion, required this.formatter});
+
+  final Excursion excursion;
+  final DateFormat formatter;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(excursion.title,
+                style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 8),
+            Text('Дата: ${formatter.format(excursion.dateTime)}'),
+            Text('Цена: ${excursion.price.toStringAsFixed(2)} ₽'),
+            Text(
+                'Свободно мест: ${excursion.availableSeatsCount} / ${excursion.maxSeats}'),
+            if (excursion.description.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Text(excursion.description),
+            ],
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                FilledButton.icon(
+                  icon: const Icon(Icons.event_seat),
+                  label: const Text('Забронировать'),
+                  onPressed: () => _book(context, ref),
+                ),
+                const SizedBox(width: 12),
+                OutlinedButton.icon(
+                  icon: const Icon(Icons.list),
+                  label: const Text('Места'),
+                  onPressed: excursion.busSeats.isEmpty
+                      ? null
+                      : () => _showSeatSheet(context),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _book(BuildContext context, WidgetRef ref) async {
+    final seats = await _promptSeatNumbers(context);
+    if (seats == null) {
+      return;
+    }
+    if (!context.mounted) {
+      return;
+    }
+
+    final messenger = ScaffoldMessenger.of(context);
+    if (seats.isEmpty) {
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Введите номера мест через запятую.')),
+      );
+      return;
+    }
+
+    try {
+      final response = await ref.read(bookingsRepositoryProvider).bookSeats(
+            excursionId: excursion.id,
+            seatNumbers: seats,
+          );
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            response.message.isNotEmpty
+                ? response.message
+                : 'Бронирование выполнено',
+          ),
+        ),
+      );
+      ref.invalidate(bookingsFutureProvider);
+      ref.invalidate(excursionsFutureProvider);
+    } catch (error) {
+      messenger.showSnackBar(
+        SnackBar(content: Text('Ошибка бронирования: $error')),
+      );
+    }
+  }
+
+  Future<List<int>?> _promptSeatNumbers(BuildContext context) async {
+    final result = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) {
+        final controller = TextEditingController();
+        return AlertDialog(
+          title: const Text('Бронирование мест'),
+          content: TextField(
+            controller: controller,
+            keyboardType: TextInputType.number,
+            decoration: const InputDecoration(
+              labelText: 'Номера мест',
+              hintText: 'Например: 3,7,11',
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(null),
+              child: const Text('Отмена'),
+            ),
+            FilledButton(
+              onPressed: () =>
+                  Navigator.of(dialogContext).pop(controller.text.trim()),
+              child: const Text('Забронировать'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (result == null) {
+      return null;
+    }
+
+    return result
+        .split(',')
+        .map((value) => int.tryParse(value.trim()))
+        .whereType<int>()
+        .toList();
+  }
+
+  Future<void> _showSeatSheet(BuildContext context) {
+    return showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Схема мест'),
+        content: SingleChildScrollView(
+          child: Center(
+            child: Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              alignment: WrapAlignment.center,
+              children: excursion.busSeats
+                  .map(
+                    (seat) => Chip(
+                      label: Text('Место ${seat.seatNumber}'),
+                      backgroundColor: seat.status == 'booked'
+                          ? Colors.red.shade200
+                          : Colors.green.shade200,
+                    ),
+                  )
+                  .toList(),
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Закрыть'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AdminWalletTab extends ConsumerWidget {
+  const _AdminWalletTab();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final bookingsAsync = ref.watch(bookingsFutureProvider);
+    final formatter = DateFormat('dd.MM.yyyy HH:mm');
+
+    return bookingsAsync.when(
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (error, _) => Center(child: Text('Не удалось загрузить: $error')),
+      data: (groups) {
+        final entries = <_WalletEntry>[];
+        double total = 0;
+        for (final group in groups) {
+          final price = group.excursion.price;
+          for (final seat in group.seats) {
+            total += price;
+            entries.add(
+              _WalletEntry(
+                excursionTitle: group.excursion.title,
+                excursionDateTime: group.excursion.dateTime,
+                seatNumber: seat.seatNumber,
+                amount: price,
+                bookedAt: seat.bookedAt,
+              ),
+            );
+          }
+        }
+        entries.sort((a, b) => b.bookedAt.compareTo(a.bookedAt));
+
+        return Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Card(
+                child: ListTile(
+                  title: const Text('Баланс'),
+                  subtitle: const Text('Сумма подтверждённых продаж'),
+                  trailing: Text(
+                    '${total.toStringAsFixed(2)} ₽',
+                    style: Theme.of(context).textTheme.headlineSmall,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'История продаж',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              const SizedBox(height: 8),
+              Expanded(
+                child: entries.isEmpty
+                    ? const Center(child: Text('Продаж пока нет'))
+                    : ListView.separated(
+                        itemCount: entries.length,
+                        separatorBuilder: (_, __) => const Divider(height: 1),
+                        itemBuilder: (context, index) {
+                          final entry = entries[index];
+                          return ListTile(
+                            title: Text(entry.excursionTitle),
+                            subtitle: Text(
+                              '${formatter.format(entry.excursionDateTime)} • Место ${entry.seatNumber}',
+                            ),
+                            trailing:
+                                Text('${entry.amount.toStringAsFixed(2)} ₽'),
+                          );
+                        },
+                      ),
+              ),
+            ],
           ),
         );
       },
@@ -82,109 +445,31 @@ class _ExcursionsTab extends ConsumerWidget {
   }
 }
 
-class _AdminExcursionTile extends StatelessWidget {
-  const _AdminExcursionTile({required this.excursion, required this.formatter});
+class _WalletEntry {
+  const _WalletEntry({
+    required this.excursionTitle,
+    required this.excursionDateTime,
+    required this.seatNumber,
+    required this.amount,
+    required this.bookedAt,
+  });
 
-  final Excursion excursion;
-  final DateFormat formatter;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      child: ExpansionTile(
-        title: Text(excursion.title, style: theme.textTheme.titleMedium),
-        subtitle: Text(
-          '${formatter.format(excursion.dateTime)} • Свободно ${excursion.availableSeatsCount}/${excursion.maxSeats}',
-        ),
-        children: [
-          if (excursion.description.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-              child: Text(excursion.description),
-            ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Цена: ${excursion.price.toStringAsFixed(2)} ₽'),
-                const SizedBox(height: 4),
-                Text('Забронировано мест: ${excursion.bookedSeatsCount}'),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+  final String excursionTitle;
+  final DateTime excursionDateTime;
+  final int seatNumber;
+  final double amount;
+  final DateTime bookedAt;
 }
 
-class _ActionsTab extends ConsumerWidget {
-  const _ActionsTab();
+class _PlaceholderTab extends StatelessWidget {
+  const _PlaceholderTab({required this.message});
 
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    Future<void> handleAddExcursion() async {
-      final created = await showDialog<Excursion>(
-        context: context,
-        builder: (dialogContext) => const _CreateExcursionDialog(),
-      );
-      if (created == null) {
-        return;
-      }
-      if (!context.mounted) {
-        return;
-      }
-      ref.invalidate(excursionsFutureProvider);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Экскурсия "${created.title}" добавлена')),
-      );
-    }
-
-    return ListView(
-      padding: const EdgeInsets.all(24),
-      children: [
-        const Text('Быстрые действия',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
-        const SizedBox(height: 16),
-        FilledButton.icon(
-          onPressed: handleAddExcursion,
-          icon: const Icon(Icons.event_available),
-          label: const Text('Добавить экскурсию'),
-        ),
-        const SizedBox(height: 12),
-        OutlinedButton.icon(
-          onPressed: () {},
-          icon: const Icon(Icons.group_add),
-          label: const Text('Назначить персонал'),
-        ),
-        const SizedBox(height: 12),
-        OutlinedButton.icon(
-          onPressed: () {},
-          icon: const Icon(Icons.monetization_on),
-          label: const Text('Обновить тарифы'),
-        ),
-      ],
-    );
-  }
-}
-
-class _StatsTab extends StatelessWidget {
-  const _StatsTab();
+  final String message;
 
   @override
   Widget build(BuildContext context) {
     return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: const [
-          Icon(Icons.insights, size: 48),
-          SizedBox(height: 12),
-          Text('Статистика в разработке'),
-        ],
-      ),
+      child: Text(message, textAlign: TextAlign.center),
     );
   }
 }

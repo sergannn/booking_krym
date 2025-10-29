@@ -40,8 +40,14 @@ class BookingExcursion {
   factory BookingExcursion.fromJson(Map<String, dynamic> json) {
     final dateTime = DateTime.parse(json['date_time'] as String);
     // Создаем date в том же часовом поясе, что и dateTime
-    final date = DateTime(dateTime.year, dateTime.month, dateTime.day, 
-        dateTime.hour, dateTime.minute, dateTime.second, dateTime.millisecond, 
+    final date = DateTime(
+        dateTime.year,
+        dateTime.month,
+        dateTime.day,
+        dateTime.hour,
+        dateTime.minute,
+        dateTime.second,
+        dateTime.millisecond,
         dateTime.microsecond);
     return BookingExcursion(
       id: json['id'] as int,
@@ -49,7 +55,7 @@ class BookingExcursion {
       date: date,
       time: json['time'] as String? ?? '',
       dateTime: dateTime,
-      price: double.parse(json['price'].toString()),
+      price: double.tryParse(json['price']?.toString() ?? '') ?? 0,
     );
   }
 }
@@ -78,20 +84,41 @@ class BookingItem {
   final DateTime bookedAt;
 
   factory BookingItem.fromJson(Map<String, dynamic> json) {
+    BookingSeat parseSeat() {
+      final seatJson = json['bus_seat'];
+      if (seatJson is Map<String, dynamic>) {
+        return BookingSeat.fromJson(seatJson);
+      }
+      final seatNumberRaw = json['seat_number'];
+      final seatNumber = seatNumberRaw is int
+          ? seatNumberRaw
+          : int.tryParse(seatNumberRaw?.toString() ?? '') ?? 0;
+      final seatId = json['bus_seat_id'] as int? ?? 0;
+      return BookingSeat(id: seatId, seatNumber: seatNumber);
+    }
+
+    DateTime parseBookedAt() {
+      final raw = json['booked_at'] ?? json['created_at'];
+      if (raw is String && raw.isNotEmpty) {
+        return DateTime.parse(raw);
+      }
+      return DateTime.now();
+    }
+
     return BookingItem(
       id: json['id'] as int,
-      excursion: BookingExcursion.fromJson(
-          json['excursion'] as Map<String, dynamic>),
-      seat: BookingSeat.fromJson(json['bus_seat'] as Map<String, dynamic>),
-      price: double.parse(json['price'].toString()),
+      excursion:
+          BookingExcursion.fromJson(json['excursion'] as Map<String, dynamic>),
+      seat: parseSeat(),
+      price: double.tryParse(json['price']?.toString() ?? '') ?? 0,
       customerName: json['customer_name'] as String? ?? '',
-      customerPhone: json['customer_phone'] as String? ?? '',
+      customerPhone: json['customer_phone']?.toString() ?? '',
       passengerType:
           PassengerTypeX.fromJson(json['passenger_type'] as String? ?? ''),
       stop: json['stop'] == null
           ? null
           : Stop.fromJson(json['stop'] as Map<String, dynamic>),
-      bookedAt: DateTime.parse(json['booked_at'] as String),
+      bookedAt: parseBookedAt(),
     );
   }
 }
@@ -108,7 +135,9 @@ class BookingSeat {
   factory BookingSeat.fromJson(Map<String, dynamic> json) {
     return BookingSeat(
       id: json['id'] as int,
-      seatNumber: json['seat_number'] as int,
+      seatNumber: json['seat_number'] is int
+          ? json['seat_number'] as int
+          : int.tryParse(json['seat_number'].toString()) ?? 0,
     );
   }
 }

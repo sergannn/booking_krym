@@ -9,6 +9,7 @@ import '../../data/models/booking.dart';
 import '../../data/repositories/bookings_repository.dart';
 import '../../data/providers.dart';
 import '../auth/auth_controller.dart';
+import '../seller/widgets/booking_dialog.dart';
 import 'widgets/users_tab.dart';
 import 'widgets/assign_staff_sheet.dart';
 
@@ -152,7 +153,8 @@ class _AdminBookingTab extends ConsumerWidget {
                           children: group.bookings
                               .map(
                                 (booking) => ListTile(
-                                  title: Text('Место ${booking.seat.seatNumber}'),
+                                  title:
+                                      Text('Место ${booking.seat.seatNumber}'),
                                   subtitle: Text(
                                     'Бронировано: ${subFormatter.format(booking.bookedAt)}',
                                   ),
@@ -280,32 +282,28 @@ class _AdminExcursionCard extends ConsumerWidget {
   }
 
   Future<void> _book(BuildContext context, WidgetRef ref) async {
-    final seats = await _promptSeatNumbers(context);
-    if (seats == null) {
-      return;
-    }
-    if (!context.mounted) {
+    final stops = await ref.read(stopsFutureProvider.future);
+    final result = await showDialog<BookingDialogResult>(
+      context: context,
+      builder: (dialogContext) => BookingDialog(stops: stops),
+    );
+
+    if (result == null) {
       return;
     }
 
     final messenger = ScaffoldMessenger.of(context);
-    if (seats.isEmpty) {
-      messenger.showSnackBar(
-        const SnackBar(content: Text('Введите номера мест через запятую.')),
-      );
-      return;
-    }
 
     try {
       final response = await ref.read(bookingsRepositoryProvider).bookSeats(
             BookSeatPayload(
               excursionId: excursion.id,
-              seatNumbers: seats,
-              price: excursion.price,
-              customerName: 'Посетитель',
-              customerPhone: '',
-              passengerType: PassengerType.adult,
-              stopId: 1,
+              seatNumbers: result.seatNumbers,
+              price: result.price,
+              customerName: result.customerName,
+              customerPhone: result.customerPhone,
+              passengerType: result.passengerType,
+              stopId: result.stopId,
             ),
           );
       messenger.showSnackBar(
@@ -324,47 +322,6 @@ class _AdminExcursionCard extends ConsumerWidget {
         SnackBar(content: Text('Ошибка бронирования: $error')),
       );
     }
-  }
-
-  Future<List<int>?> _promptSeatNumbers(BuildContext context) async {
-    final result = await showDialog<String>(
-      context: context,
-      builder: (dialogContext) {
-        final controller = TextEditingController();
-        return AlertDialog(
-          title: const Text('Бронирование мест'),
-          content: TextField(
-            controller: controller,
-            keyboardType: TextInputType.number,
-            decoration: const InputDecoration(
-              labelText: 'Номера мест',
-              hintText: 'Например: 3,7,11',
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(null),
-              child: const Text('Отмена'),
-            ),
-            FilledButton(
-              onPressed: () =>
-                  Navigator.of(dialogContext).pop(controller.text.trim()),
-              child: const Text('Забронировать'),
-            ),
-          ],
-        );
-      },
-    );
-
-    if (result == null) {
-      return null;
-    }
-
-    return result
-        .split(',')
-        .map((value) => int.tryParse(value.trim()))
-        .whereType<int>()
-        .toList();
   }
 
   Future<void> _showSeatSheet(BuildContext context) {

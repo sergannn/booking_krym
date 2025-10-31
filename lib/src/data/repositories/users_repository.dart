@@ -56,4 +56,11 @@ class UsersRepository {
     final userJson = response['user'] as Map<String, dynamic>;
     return UserSummary.fromJson(userJson);
   }
+
+  Future<void> deleteUser(int userId) async {
+    await _client.deleteJson(
+      '/api/users/$userId',
+      authenticated: true,
+    );
+  }
 }

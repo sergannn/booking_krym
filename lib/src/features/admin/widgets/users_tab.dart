@@ -9,7 +9,9 @@ import '../../../core/api/api_exception.dart';
 import 'staff_wallet_sheet.dart';
 
 class UsersTab extends ConsumerStatefulWidget {
-  const UsersTab({super.key});
+  const UsersTab({super.key, required this.currentUserId});
+
+  final int currentUserId;
 
   @override
   ConsumerState<UsersTab> createState() => _UsersTabState();
@@ -108,12 +110,33 @@ class _UsersTabState extends ConsumerState<UsersTab> {
                         ),
                         title: Text(user.name),
                         subtitle: Text('${user.email} • ${user.roleName}'),
-                        trailing: user.balance > 0
-                            ? Text(
-                                '${user.balance.toStringAsFixed(2)} ₽',
-                                style: const TextStyle(color: Colors.green),
-                              )
-                            : null,
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (user.balance > 0)
+                              Padding(
+                                padding:
+                                    const EdgeInsets.symmetric(horizontal: 8),
+                                child: Text(
+                                  '${user.balance.toStringAsFixed(2)} ₽',
+                                  style: const TextStyle(color: Colors.green),
+                                ),
+                              ),
+                            PopupMenuButton<_UserAction>(
+                              onSelected: (action) {
+                                if (action == _UserAction.delete) {
+                                  _deleteUser(context, user);
+                                }
+                              },
+                              itemBuilder: (context) => [
+                                const PopupMenuItem(
+                                  value: _UserAction.delete,
+                                  child: Text('Удалить'),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
                         onTap: () => _openWallet(context, user),
                       );
                     },
@@ -135,7 +158,55 @@ class _UsersTabState extends ConsumerState<UsersTab> {
       builder: (context) => StaffWalletSheet(user: user),
     );
   }
+
+  Future<void> _deleteUser(BuildContext context, UserSummary user) async {
+    if (user.id == widget.currentUserId) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Нельзя удалить собственного пользователя')),
+      );
+      return;
+    }
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Удалить пользователя'),
+        content: Text(
+          'Вы уверены, что хотите удалить сотрудника "${user.name}"?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Отмена'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Удалить'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) {
+      return;
+    }
+
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await ref.read(usersRepositoryProvider).deleteUser(user.id);
+      ref.invalidate(allUsersFutureProvider);
+      messenger.showSnackBar(
+        SnackBar(content: Text('Пользователь "${user.name}" удалён')),
+      );
+    } catch (error) {
+      messenger.showSnackBar(
+        SnackBar(content: Text('Не удалось удалить: $error')),
+      );
+    }
+  }
 }
+
+enum _UserAction { delete }
 
 class _UsersError extends StatelessWidget {
   const _UsersError({required this.message});

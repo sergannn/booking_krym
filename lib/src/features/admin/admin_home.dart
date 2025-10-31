@@ -67,13 +67,13 @@ class AdminHomePage extends StatelessWidget {
             ],
           ),
         ),
-        body: const TabBarView(
+        body: TabBarView(
           children: [
             _AdminBookingTab(),
             _AdminWalletTab(),
             _PlaceholderTab(message: 'Статистика в разработке'),
             _PlaceholderTab(message: 'Расписание в разработке'),
-            const UsersTab(),
+            UsersTab(currentUserId: user.id),
             _PlaceholderTab(message: 'Цены в разработке'),
           ],
         ),

@@ -4,6 +4,8 @@ import 'package:intl/intl.dart';
 
 import '../../data/models/user.dart';
 import '../../data/models/excursion.dart';
+import '../../data/models/booking.dart';
+import '../../data/models/wallet.dart';
 import '../../data/repositories/bookings_repository.dart';
 import '../seller/widgets/booking_dialog.dart';
 import '../../data/providers.dart';
@@ -26,7 +28,7 @@ class _SellerHomePageState extends ConsumerState<SellerHomePage> {
     final pages = [
       const _ExcursionsTab(),
       const _BookingsTab(),
-      const _SellerWalletTab(),
+      _SellerWalletTab(user: widget.user),
     ];
 
     return Scaffold(
@@ -39,6 +41,8 @@ class _SellerHomePageState extends ConsumerState<SellerHomePage> {
             onPressed: () {
               ref.invalidate(excursionsFutureProvider);
               ref.invalidate(bookingsFutureProvider);
+              ref.invalidate(_sellerWalletProvider(widget.user.id));
+              ref.invalidate(_sellerSalesProvider(widget.user.id));
             },
           ),
           IconButton(
@@ -391,66 +395,183 @@ class _ErrorMessage extends StatelessWidget {
 }
 
 class _SellerWalletTab extends ConsumerWidget {
-  const _SellerWalletTab();
+  const _SellerWalletTab({required this.user});
+
+  final User user;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final walletAsync = ref.watch(_sellerWalletProvider(user.id));
+    final salesAsync = ref.watch(_sellerSalesProvider(user.id));
     final bookingsAsync = ref.watch(bookingsFutureProvider);
     final formatter = DateFormat('dd.MM.yyyy HH:mm');
 
-    return bookingsAsync.when(
+    return walletAsync.when(
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (error, _) => _ErrorMessage(message: '$error'),
-      data: (groups) {
-        final bookings = groups
-            .expand((group) => group.bookings)
-            .toList()
-          ..sort((a, b) => b.bookedAt.compareTo(a.bookedAt));
-        final total = bookings.fold<double>(
-          0,
-          (sum, item) => sum + item.price,
-        );
-
-        return Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+      data: (wallet) {
+        return RefreshIndicator(
+          onRefresh: () async {
+            ref.invalidate(_sellerWalletProvider(user.id));
+            ref.invalidate(_sellerSalesProvider(user.id));
+            ref.invalidate(bookingsFutureProvider);
+            await Future.wait([
+              ref.read(_sellerWalletProvider(user.id).future),
+              ref.read(_sellerSalesProvider(user.id).future),
+              ref.read(bookingsFutureProvider.future),
+            ]);
+          },
+          child: ListView(
+            padding: const EdgeInsets.all(16),
             children: [
               Card(
                 child: ListTile(
                   title: const Text('Баланс'),
-                  subtitle: const Text('Сумма подтверждённых продаж'),
+                  subtitle: const Text('Текущий остаток по кошельку'),
                   trailing: Text(
-                    '${total.toStringAsFixed(2)} ₽',
-                    style: Theme.of(context).textTheme.headlineSmall,
+                    '${wallet.balance.toStringAsFixed(2)} ₽',
+                    style: Theme.of(context)
+                        .textTheme
+                        .headlineSmall
+                        ?.copyWith(color: Colors.green),
                   ),
                 ),
               ),
               const SizedBox(height: 16),
               Text(
-                'История продаж',
+                'История транзакций',
                 style: Theme.of(context).textTheme.titleMedium,
               ),
               const SizedBox(height: 8),
-              Expanded(
-                child: bookings.isEmpty
-                    ? const Center(child: Text('Продаж пока нет'))
-                    : ListView.separated(
-                        itemCount: bookings.length,
-                        separatorBuilder: (_, __) => const Divider(height: 1),
-                        itemBuilder: (context, index) {
-                          final entry = bookings[index];
-                          return ListTile(
-                            title: Text(entry.excursion.title),
-                            subtitle: Text(
-                              '${formatter.format(entry.excursion.dateTime)} • Место ${entry.seat.seatNumber}',
+              if (wallet.transactions.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.all(16),
+                  child: Text('Транзакций пока нет'),
+                )
+              else
+                ...wallet.transactions.map(
+                  (transaction) => ListTile(
+                    leading: CircleAvatar(
+                      backgroundColor: transaction.amount >= 0
+                          ? Colors.green.shade100
+                          : Colors.red.shade100,
+                      child: Icon(
+                        transaction.amount >= 0
+                            ? Icons.arrow_downward
+                            : Icons.arrow_upward,
+                        color: transaction.amount >= 0
+                            ? Colors.green
+                            : Colors.red,
+                      ),
+                    ),
+                    title: Text(transaction.description),
+                    subtitle: Text(
+                      formatter.format(transaction.createdAt),
+                    ),
+                    trailing: Text(
+                      '${transaction.amount.toStringAsFixed(2)} ₽',
+                      style: TextStyle(
+                        color: transaction.amount >= 0
+                            ? Colors.green
+                            : Colors.red,
+                      ),
+                    ),
+                  ),
+                ),
+              const SizedBox(height: 24),
+              Text(
+                'Продажи',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              const SizedBox(height: 8),
+              salesAsync.when(
+                loading: () => const Center(child: CircularProgressIndicator()),
+                error: (error, _) => Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Text('Ошибка загрузки: $error'),
+                ),
+                data: (sales) {
+                  if (sales.bookings.isEmpty) {
+                    return const Padding(
+                      padding: EdgeInsets.all(16),
+                      child: Text('Продаж пока нет'),
+                    );
+                  }
+                  return Column(
+                    children: sales.bookings
+                        .map(
+                          (booking) => ListTile(
+                            title: Text(booking.excursion.title),
+                            subtitle: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  formatter.format(booking.excursion.dateTime),
+                                ),
+                                Text(
+                                  '${booking.customerName} • ${booking.customerPhone}',
+                                ),
+                                Text(booking.passengerType.label),
+                              ],
                             ),
                             trailing: Text(
-                              '${entry.price.toStringAsFixed(2)} ₽',
+                              '${booking.price.toStringAsFixed(2)} ₽',
                             ),
-                          );
-                        },
-                      ),
+                          ),
+                        )
+                        .toList(),
+                  );
+                },
+              ),
+              const SizedBox(height: 24),
+              Text(
+                'Активные бронирования',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              const SizedBox(height: 8),
+              bookingsAsync.when(
+                loading: () => const Center(child: CircularProgressIndicator()),
+                error: (error, _) => Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Text('Ошибка: $error'),
+                ),
+                data: (groups) {
+                  if (groups.isEmpty) {
+                    return const Padding(
+                      padding: EdgeInsets.all(16),
+                      child: Text('Вы ещё не бронировали места'),
+                    );
+                  }
+                  return Column(
+                    children: groups.map((group) {
+                      return Card(
+                        margin: const EdgeInsets.only(bottom: 12),
+                        child: ExpansionTile(
+                          title: Text(group.excursion.title),
+                          subtitle: Text(
+                            '${formatter.format(group.excursion.dateTime)} • ${group.bookings.length} мест',
+                          ),
+                          children: group.bookings
+                              .map(
+                                (booking) => ListTile(
+                                  title: Text('Место ${booking.seat.seatNumber}'),
+                                  subtitle: Text(
+                                    'Бронировано: ${formatter.format(booking.bookedAt)}',
+                                  ),
+                                  trailing: IconButton(
+                                    icon: const Icon(Icons.cancel),
+                                    tooltip: 'Отменить',
+                                    onPressed: () =>
+                                        _cancelBooking(context, ref, booking.id),
+                                  ),
+                                ),
+                              )
+                              .toList(),
+                        ),
+                      );
+                    }).toList(),
+                  );
+                },
               ),
             ],
           ),
@@ -458,4 +579,30 @@ class _SellerWalletTab extends ConsumerWidget {
       },
     );
   }
+
+  Future<void> _cancelBooking(
+      BuildContext context, WidgetRef ref, int bookingId) async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await ref.read(bookingsRepositoryProvider).cancelBooking(bookingId);
+      ref.invalidate(bookingsFutureProvider);
+      ref.invalidate(_sellerWalletProvider(user.id));
+      ref.invalidate(_sellerSalesProvider(user.id));
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Бронирование отменено')),
+      );
+    } catch (error) {
+      messenger.showSnackBar(
+        SnackBar(content: Text('Не удалось отменить: $error')),
+      );
+    }
+  }
 }
+
+final _sellerWalletProvider = FutureProvider.family<WalletInfo, int>((ref, userId) {
+  return ref.watch(walletRepositoryProvider).fetchWallet(userId);
+});
+
+final _sellerSalesProvider = FutureProvider.family<SalesInfo, int>((ref, userId) {
+  return ref.watch(walletRepositoryProvider).fetchSales(userId);
+});

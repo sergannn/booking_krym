@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../../../data/models/user_summary.dart';
-import '../../../data/models/wallet.dart';
 import '../../../data/models/booking.dart';
 import '../../../data/providers.dart';
 
@@ -14,8 +13,8 @@ class StaffWalletSheet extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final walletAsync = ref.watch(_walletProvider(user.id));
-    final salesAsync = ref.watch(_salesProvider(user.id));
+    final walletAsync = ref.watch(userWalletFutureProvider(user.id));
+    final salesAsync = ref.watch(userSalesFutureProvider(user.id));
     final formatter = DateFormat('dd.MM.yyyy HH:mm');
 
     return DraggableScrollableSheet(
@@ -63,7 +62,7 @@ class StaffWalletSheet extends ConsumerWidget {
                         trailing: IconButton(
                           icon: const Icon(Icons.refresh),
                           onPressed: () =>
-                              ref.refresh(_walletProvider(user.id).future),
+                              ref.refresh(userWalletFutureProvider(user.id).future),
                         ),
                       ),
                       data: (wallet) => Card(
@@ -203,11 +202,3 @@ class StaffWalletSheet extends ConsumerWidget {
     );
   }
 }
-
-final _walletProvider = FutureProvider.family<WalletInfo, int>((ref, userId) {
-  return ref.watch(walletRepositoryProvider).fetchWallet(userId);
-});
-
-final _salesProvider = FutureProvider.family<SalesInfo, int>((ref, userId) {
-  return ref.watch(walletRepositoryProvider).fetchSales(userId);
-});

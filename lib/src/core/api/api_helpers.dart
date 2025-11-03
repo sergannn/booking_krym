@@ -21,11 +21,25 @@ extension HttpResponseJson on ApiClient {
     return jsonDecode(response.body) as Map<String, dynamic>;
   }
 
-  Future<Map<String, dynamic>> deleteJson(
+  Future<Map<String, dynamic>> putJson(
     String path, {
+    Map<String, dynamic>? body,
     bool authenticated = false,
   }) async {
-    final response = await delete(path, authenticated: authenticated);
+    final response = await put(path, body: body, authenticated: authenticated);
+    return jsonDecode(response.body) as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> deleteJson(
+    String path, {
+    Map<String, dynamic>? body,
+    bool authenticated = false,
+  }) async {
+    final response = await delete(
+      path,
+      body: body,
+      authenticated: authenticated,
+    );
     if (response.body.isEmpty) {
       return const {};
     }

@@ -6,7 +6,6 @@ class BookSeatPayload {
   const BookSeatPayload({
     required this.excursionId,
     required this.seatNumbers,
-    required this.price,
     required this.customerName,
     required this.customerPhone,
     required this.passengerType,
@@ -15,7 +14,6 @@ class BookSeatPayload {
 
   final int excursionId;
   final List<int> seatNumbers;
-  final double price;
   final String customerName;
   final String customerPhone;
   final PassengerType passengerType;
@@ -25,7 +23,6 @@ class BookSeatPayload {
     return {
       'excursion_id': excursionId,
       'seat_numbers': seatNumbers,
-      'price': price,
       'customer_name': customerName,
       'customer_phone': customerPhone,
       'passenger_type': passengerType.apiValue,
@@ -59,7 +56,13 @@ class BookingsRepository {
     return BookingResponse.fromJson(response);
   }
 
-  Future<void> cancelBooking(int bookingId) async {
-    await _client.deleteJson('/api/bookings/$bookingId', authenticated: true);
+  Future<void> cancelBooking(int bookingId, {required String reason}) async {
+    await _client.deleteJson(
+      '/api/bookings/$bookingId',
+      authenticated: true,
+      body: {
+        'reason': reason,
+      },
+    );
   }
 }

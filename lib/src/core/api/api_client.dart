@@ -54,6 +54,21 @@ class ApiClient {
     return response;
   }
 
+  Future<http.Response> put(
+    String path, {
+    Map<String, dynamic>? body,
+    bool authenticated = false,
+  }) async {
+    final headers = await _headers(authenticated: authenticated);
+    final response = await _client.put(
+      _buildUri(path),
+      headers: headers,
+      body: body == null ? null : jsonEncode(body),
+    );
+    _throwIfNeeded(response);
+    return response;
+  }
+
   Future<http.Response> get(
     String path, {
     Map<String, dynamic>? query,
@@ -70,12 +85,14 @@ class ApiClient {
 
   Future<http.Response> delete(
     String path, {
+    Map<String, dynamic>? body,
     bool authenticated = false,
   }) async {
     final headers = await _headers(authenticated: authenticated);
     final response = await _client.delete(
       _buildUri(path),
       headers: headers,
+      body: body == null ? null : jsonEncode(body),
     );
     _throwIfNeeded(response);
     return response;

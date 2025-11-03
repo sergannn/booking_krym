@@ -14,6 +14,7 @@ class Excursion {
     required this.availableSeatsCount,
     required this.assignedStaff,
     required this.busSeats,
+    required this.tariffs,
   });
 
   final int id;
@@ -28,12 +29,14 @@ class Excursion {
   final int availableSeatsCount;
   final List<ExcursionStaff> assignedStaff;
   final List<BusSeat> busSeats;
+  final Map<String, double> tariffs;
 
   bool get isPast => dateTime.isBefore(DateTime.now());
 
   factory Excursion.fromJson(Map<String, dynamic> json) {
     final seatsJson = json['bus_seats'] as List<dynamic>?;
     final staffJson = json['assigned_staff'] as List<dynamic>?;
+    final pricesJson = json['prices'] as List<dynamic>?;
     final dateTime = DateTime.parse(json['date_time'] as String);
     // Создаем date в том же часовом поясе, что и dateTime
     final date = DateTime(dateTime.year, dateTime.month, dateTime.day, 
@@ -61,7 +64,52 @@ class Excursion {
           : seatsJson
               .map((seat) => BusSeat.fromJson(seat as Map<String, dynamic>))
               .toList(),
+      tariffs: _parseTariffs(pricesJson, double.parse(json['price'].toString())),
     );
+  }
+
+  static Map<String, double> _parseTariffs(
+    List<dynamic>? pricesJson,
+    double defaultPrice,
+  ) {
+    if (pricesJson == null || pricesJson.isEmpty) {
+      return {
+        'adult': defaultPrice,
+        'child': defaultPrice,
+        'senior': defaultPrice,
+        'disabled': defaultPrice,
+      };
+    }
+
+    final map = <String, double>{
+      'adult': defaultPrice,
+      'child': defaultPrice,
+      'senior': defaultPrice,
+      'disabled': defaultPrice,
+    };
+
+    for (final item in pricesJson) {
+      final json = item as Map<String, dynamic>?;
+      if (json == null) {
+        continue;
+      }
+      final type = json['passenger_type'] as String?;
+      final priceValue = json['price'];
+      if (type == null || priceValue == null) {
+        continue;
+      }
+      final parsed = double.tryParse(priceValue.toString());
+      if (parsed == null) {
+        continue;
+      }
+      map[type] = parsed;
+    }
+
+    return map;
+  }
+
+  double priceFor(String passengerType) {
+    return tariffs[passengerType] ?? price;
   }
 }
 

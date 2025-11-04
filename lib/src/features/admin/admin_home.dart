@@ -429,15 +429,23 @@ class _AdminExcursionCard extends ConsumerWidget {
   }
 }
 
-class _AdminWalletTab extends ConsumerWidget {
+class _AdminWalletTab extends ConsumerStatefulWidget {
   const _AdminWalletTab({required this.user});
 
   final User user;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final walletAsync = ref.watch(userWalletFutureProvider(user.id));
-    final salesAsync = ref.watch(userSalesFutureProvider(user.id));
+  ConsumerState<_AdminWalletTab> createState() => _AdminWalletTabState();
+}
+
+class _AdminWalletTabState extends ConsumerState<_AdminWalletTab> {
+  int _sectionIndex = 0;
+
+  @override
+  Widget build(BuildContext context) {
+    final walletAsync = ref.watch(userWalletFutureProvider(widget.user.id));
+    final salesAsync = ref.watch(userSalesFutureProvider(widget.user.id));
+    final profitAsync = ref.watch(userProfitFutureProvider(widget.user.id));
     final bookingsAsync = ref.watch(bookingsFutureProvider);
     final formatter = DateFormat('dd.MM.yyyy HH:mm');
 
@@ -447,12 +455,14 @@ class _AdminWalletTab extends ConsumerWidget {
       data: (wallet) {
         return RefreshIndicator(
           onRefresh: () async {
-            ref.invalidate(userWalletFutureProvider(user.id));
-            ref.invalidate(userSalesFutureProvider(user.id));
+            ref.invalidate(userWalletFutureProvider(widget.user.id));
+            ref.invalidate(userSalesFutureProvider(widget.user.id));
+            ref.invalidate(userProfitFutureProvider(widget.user.id));
             ref.invalidate(bookingsFutureProvider);
             await Future.wait([
-              ref.read(userWalletFutureProvider(user.id).future),
-              ref.read(userSalesFutureProvider(user.id).future),
+              ref.read(userWalletFutureProvider(widget.user.id).future),
+              ref.read(userSalesFutureProvider(widget.user.id).future),
+              ref.read(userProfitFutureProvider(widget.user.id).future),
               ref.read(bookingsFutureProvider.future),
             ]);
           },
@@ -514,55 +524,191 @@ class _AdminWalletTab extends ConsumerWidget {
                   ),
                 ),
               const SizedBox(height: 24),
-              Text(
-                'Продажи',
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
-              const SizedBox(height: 8),
-              salesAsync.when(
-                loading: () => const Center(
-                  child: Padding(
-                    padding: EdgeInsets.all(16),
-                    child: CircularProgressIndicator(),
+              ToggleButtons(
+                borderRadius: BorderRadius.circular(8),
+                isSelected: List.generate(2, (index) => index == _sectionIndex),
+                onPressed: (index) => setState(() => _sectionIndex = index),
+                children: const [
+                  Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 16),
+                    child: Text('Продажи'),
                   ),
+                  Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 16),
+                    child: Text('Прибыль'),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              if (_sectionIndex == 0) ...[
+                Text(
+                  'Продажи',
+                  style: Theme.of(context).textTheme.titleMedium,
                 ),
-                error: (error, _) => Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Text('Ошибка загрузки: $error'),
-                ),
-                data: (sales) {
-                  if (sales.bookings.isEmpty) {
-                    return const Padding(
+                const SizedBox(height: 8),
+                salesAsync.when(
+                  loading: () => const Center(
+                    child: Padding(
                       padding: EdgeInsets.all(16),
-                      child: Text('Продаж пока нет'),
+                      child: CircularProgressIndicator(),
+                    ),
+                  ),
+                  error: (error, _) => Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Text('Ошибка загрузки: $error'),
+                  ),
+                  data: (sales) {
+                    if (sales.bookings.isEmpty) {
+                      return const Padding(
+                        padding: EdgeInsets.all(16),
+                        child: Text('Продаж пока нет'),
+                      );
+                    }
+                    return Column(
+                      children: sales.bookings
+                          .map(
+                            (booking) => ListTile(
+                              title: Text(booking.excursion.title),
+                              subtitle: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    formatter
+                                        .format(booking.excursion.dateTime),
+                                  ),
+                                  Text(
+                                    '${booking.customerName} • ${booking.customerPhone}',
+                                  ),
+                                  Text(booking.passengerType.label),
+                                ],
+                              ),
+                              trailing: Text(
+                                '${booking.price.toStringAsFixed(2)} ₽',
+                              ),
+                            ),
+                          )
+                          .toList(),
                     );
-                  }
-                  return Column(
-                    children: sales.bookings
+                  },
+                ),
+              ] else ...[
+                Text(
+                  'Прибыль',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                const SizedBox(height: 8),
+                profitAsync.when(
+                  loading: () => const Center(
+                    child: Padding(
+                      padding: EdgeInsets.all(16),
+                      child: CircularProgressIndicator(),
+                    ),
+                  ),
+                  error: (error, _) => Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Text('Ошибка загрузки: $error'),
+                  ),
+                  data: (profit) {
+                    if (profit.breakdown.isEmpty) {
+                      return const Padding(
+                        padding: EdgeInsets.all(16),
+                        child: Text('Прибыль пока не рассчитана'),
+                      );
+                    }
+
+                    final totalsTiles = profit.totalsByType.entries
                         .map(
-                          (booking) => ListTile(
-                            title: Text(booking.excursion.title),
-                            subtitle: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  formatter.format(booking.excursion.dateTime),
-                                ),
-                                Text(
-                                  '${booking.customerName} • ${booking.customerPhone}',
-                                ),
-                                Text(booking.passengerType.label),
-                              ],
+                          (entry) => ListTile(
+                            title: Text(entry.key.label),
+                            subtitle: Text(
+                              'Продажи: ${entry.value.sales.toStringAsFixed(2)} ₽',
                             ),
                             trailing: Text(
-                              '${booking.price.toStringAsFixed(2)} ₽',
+                              '+${entry.value.commission.toStringAsFixed(2)} ₽',
+                              style: const TextStyle(color: Colors.green),
                             ),
                           ),
                         )
-                        .toList(),
-                  );
-                },
-              ),
+                        .toList();
+
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Card(
+                          child: ListTile(
+                            title: const Text('Общая прибыль'),
+                            subtitle: Text(
+                              profit.isPartner
+                                  ? 'Партнёрская комиссия'
+                                  : '10% от продаж',
+                            ),
+                            trailing: Text(
+                              '${profit.totalProfit.toStringAsFixed(2)} ₽',
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .headlineSmall
+                                  ?.copyWith(color: Colors.green),
+                            ),
+                          ),
+                        ),
+                        if (totalsTiles.isNotEmpty) ...[
+                          const SizedBox(height: 12),
+                          Card(
+                            child: Column(
+                              children: [
+                                const ListTile(
+                                  title: Text('Итого по категориям'),
+                                ),
+                                const Divider(height: 1),
+                                ...totalsTiles,
+                              ],
+                            ),
+                          ),
+                        ],
+                        const SizedBox(height: 12),
+                        ...profit.breakdown.map(
+                          (item) => Card(
+                            margin: const EdgeInsets.only(bottom: 12),
+                            child: ListTile(
+                              title: Text(item.excursion.title),
+                              subtitle: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    formatter.format(item.excursion.dateTime),
+                                  ),
+                                  Text(item.passengerType.label),
+                                  Text(
+                                    'Продажа: ${item.price.toStringAsFixed(2)} ₽',
+                                  ),
+                                ],
+                              ),
+                              trailing: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                children: [
+                                  Text(
+                                    '+${item.commissionAmount.toStringAsFixed(2)} ₽',
+                                    style: const TextStyle(
+                                      color: Colors.green,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                  Text(
+                                    '${item.commissionPercent.toStringAsFixed(1)} %',
+                                    style:
+                                        Theme.of(context).textTheme.bodySmall,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    );
+                  },
+                ),
+              ],
               const SizedBox(height: 24),
               Text(
                 'Активные бронирования',
@@ -608,7 +754,6 @@ class _AdminWalletTab extends ConsumerWidget {
                                     tooltip: 'Отменить',
                                     onPressed: () => _cancelBooking(
                                       context,
-                                      ref,
                                       booking.id,
                                     ),
                                   ),
@@ -630,7 +775,6 @@ class _AdminWalletTab extends ConsumerWidget {
 
   Future<void> _cancelBooking(
     BuildContext context,
-    WidgetRef ref,
     int bookingId,
   ) async {
     final messenger = ScaffoldMessenger.of(context);
@@ -648,8 +792,9 @@ class _AdminWalletTab extends ConsumerWidget {
           .read(bookingsRepositoryProvider)
           .cancelBooking(bookingId, reason: reason);
       ref.invalidate(bookingsFutureProvider);
-      ref.invalidate(userWalletFutureProvider(user.id));
-      ref.invalidate(userSalesFutureProvider(user.id));
+      ref.invalidate(userWalletFutureProvider(widget.user.id));
+      ref.invalidate(userSalesFutureProvider(widget.user.id));
+      ref.invalidate(userProfitFutureProvider(widget.user.id));
       messenger.showSnackBar(
         const SnackBar(content: Text('Бронирование отменено')),
       );

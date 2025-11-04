@@ -29,7 +29,7 @@ class Excursion {
   final int availableSeatsCount;
   final List<ExcursionStaff> assignedStaff;
   final List<BusSeat> busSeats;
-  final Map<String, double> tariffs;
+  final Map<String, ExcursionTariff> tariffs;
 
   bool get isPast => dateTime.isBefore(DateTime.now());
 
@@ -68,24 +68,30 @@ class Excursion {
     );
   }
 
-  static Map<String, double> _parseTariffs(
+  static Map<String, ExcursionTariff> _parseTariffs(
     List<dynamic>? pricesJson,
     double defaultPrice,
   ) {
+    final defaultTariff = ExcursionTariff(
+      price: defaultPrice,
+      sellerCommissionPercent: 10,
+      partnerCommissionPercent: 10,
+    );
+
     if (pricesJson == null || pricesJson.isEmpty) {
       return {
-        'adult': defaultPrice,
-        'child': defaultPrice,
-        'senior': defaultPrice,
-        'disabled': defaultPrice,
+        'adult': defaultTariff,
+        'child': defaultTariff,
+        'senior': defaultTariff,
+        'disabled': defaultTariff,
       };
     }
 
-    final map = <String, double>{
-      'adult': defaultPrice,
-      'child': defaultPrice,
-      'senior': defaultPrice,
-      'disabled': defaultPrice,
+    final map = <String, ExcursionTariff>{
+      'adult': defaultTariff,
+      'child': defaultTariff,
+      'senior': defaultTariff,
+      'disabled': defaultTariff,
     };
 
     for (final item in pricesJson) {
@@ -94,23 +100,45 @@ class Excursion {
         continue;
       }
       final type = json['passenger_type'] as String?;
-      final priceValue = json['price'];
-      if (type == null || priceValue == null) {
+      if (type == null || type.isEmpty) {
         continue;
       }
-      final parsed = double.tryParse(priceValue.toString());
-      if (parsed == null) {
-        continue;
-      }
-      map[type] = parsed;
+
+      final priceValue = double.tryParse(json['price']?.toString() ?? '') ?? defaultPrice;
+      final seller = double.tryParse(
+            json['seller_commission_percent']?.toString() ?? '',
+          ) ??
+          10;
+      final partner = double.tryParse(
+            json['partner_commission_percent']?.toString() ?? '',
+          ) ??
+          10;
+
+      map[type] = ExcursionTariff(
+        price: priceValue,
+        sellerCommissionPercent: seller,
+        partnerCommissionPercent: partner,
+      );
     }
 
     return map;
   }
 
   double priceFor(String passengerType) {
-    return tariffs[passengerType] ?? price;
+    return tariffs[passengerType]?.price ?? price;
   }
+}
+
+class ExcursionTariff {
+  const ExcursionTariff({
+    required this.price,
+    required this.sellerCommissionPercent,
+    required this.partnerCommissionPercent,
+  });
+
+  final double price;
+  final double sellerCommissionPercent;
+  final double partnerCommissionPercent;
 }
 
 class ExcursionStaff {

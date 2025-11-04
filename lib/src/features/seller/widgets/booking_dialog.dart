@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../data/models/booking.dart';
 import '../../../data/models/stop.dart';
+import '../../../data/models/excursion.dart';
 
 class BookingDialog extends StatefulWidget {
   const BookingDialog({
@@ -12,7 +13,7 @@ class BookingDialog extends StatefulWidget {
   });
 
   final List<Stop> stops;
-  final Map<String, double> tariffs;
+  final Map<String, ExcursionTariff> tariffs;
   final List<int> initialSeatNumbers;
   final bool lockSeatSelection;
 
@@ -131,8 +132,8 @@ class _BookingDialogState extends State<BookingDialog> {
               const SizedBox(height: 12),
               Builder(
                 builder: (context) {
-                  final pricePerSeat =
-                      widget.tariffs[_passengerType.apiValue];
+                  final tariff = widget.tariffs[_passengerType.apiValue];
+                  final pricePerSeat = tariff?.price;
                   if (pricePerSeat != null) {
                     return Text(
                       'Цена за место: ${pricePerSeat.toStringAsFixed(2)} ₽',
@@ -196,7 +197,8 @@ class _BookingDialogState extends State<BookingDialog> {
               );
               return;
             }
-            final pricePerSeat = widget.tariffs[_passengerType.apiValue];
+            final pricePerSeat =
+                widget.tariffs[_passengerType.apiValue]?.price;
             if (pricePerSeat == null) {
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(

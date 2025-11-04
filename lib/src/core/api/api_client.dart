@@ -11,22 +11,29 @@ abstract class TokenProvider {
 }
 
 class ApiClient {
-  ApiClient._();
+  ApiClient._internal() : _client = http.Client();
 
-  static final ApiClient instance = ApiClient._();
+  static final ApiClient instance = ApiClient._internal();
 
+  static ApiClient create() => ApiClient._internal();
+
+  final http.Client _client;
   late String _baseUrl;
   late TokenProvider _tokenProvider;
-  final http.Client _client = http.Client();
 
-  void configure({required String baseUrl, required TokenProvider tokenProvider}) {
+  void configure(
+      {required String baseUrl, required TokenProvider tokenProvider}) {
     _baseUrl = baseUrl;
     _tokenProvider = tokenProvider;
   }
 
   Uri _buildUri(String path, [Map<String, dynamic>? query]) {
-    return Uri.parse(_baseUrl).replace(
-      path: path.startsWith('/') ? path : '/$path',
+    final uri = Uri.parse(_baseUrl);
+    final normalizedPath = path.startsWith('/') ? path.substring(1) : path;
+    return uri.replace(
+      path: uri.path.endsWith('/')
+          ? '${uri.path}$normalizedPath'
+          : '${uri.path}/$normalizedPath',
       queryParameters: query?.map((key, value) => MapEntry(key, '$value')),
     );
   }
@@ -37,6 +44,17 @@ class ApiClient {
       'Accept': 'application/json',
       if (extra != null) ...extra,
     };
+  }
+
+  Future<http.Response> get(
+    String path, {
+    Map<String, dynamic>? query,
+    bool authenticated = false,
+  }) async {
+    final headers = await _headers(authenticated: authenticated);
+    final response = await _client.get(_buildUri(path, query), headers: headers);
+    _throwIfNeeded(response);
+    return response;
   }
 
   Future<http.Response> post(
@@ -54,15 +72,16 @@ class ApiClient {
     return response;
   }
 
-  Future<http.Response> get(
+  Future<http.Response> put(
     String path, {
-    Map<String, dynamic>? query,
+    Map<String, dynamic>? body,
     bool authenticated = false,
   }) async {
     final headers = await _headers(authenticated: authenticated);
-    final response = await _client.get(
-      _buildUri(path, query),
+    final response = await _client.put(
+      _buildUri(path),
       headers: headers,
+      body: body == null ? null : jsonEncode(body),
     );
     _throwIfNeeded(response);
     return response;
@@ -70,12 +89,14 @@ class ApiClient {
 
   Future<http.Response> delete(
     String path, {
+    Map<String, dynamic>? body,
     bool authenticated = false,
   }) async {
     final headers = await _headers(authenticated: authenticated);
     final response = await _client.delete(
       _buildUri(path),
       headers: headers,
+      body: body == null ? null : jsonEncode(body),
     );
     _throwIfNeeded(response);
     return response;

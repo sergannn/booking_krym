@@ -6,7 +6,8 @@ import 'package:http/http.dart' as http;
 Future<void> main() async {
   const baseUrl = 'https://excursion.panfilius.ru';
 
-  Future<void> log(String message) async => print('[API TEST] $message');
+  Future<void> log(String message) async =>
+      stdout.writeln('[API TEST] $message');
 
   final client = http.Client();
 

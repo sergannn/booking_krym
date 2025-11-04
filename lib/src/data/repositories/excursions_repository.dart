@@ -56,4 +56,24 @@ class ExcursionsRepository {
     }
     return Excursion.fromJson(data);
   }
+
+  Future<Excursion> updateTariffs({
+    required int excursionId,
+    required Map<String, double> prices,
+  }) async {
+    final response = await _client.putJson(
+      '/api/excursions/$excursionId/prices',
+      authenticated: true,
+      body: {
+        'prices': prices,
+      },
+    );
+
+    final data = response['data'] as Map<String, dynamic>?;
+    if (data == null) {
+      throw const FormatException('Неверный ответ сервера при обновлении тарифов');
+    }
+
+    return Excursion.fromJson(data);
+  }
 }

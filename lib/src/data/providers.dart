@@ -6,6 +6,8 @@ import 'models/excursion.dart';
 import 'models/stop.dart';
 import 'models/user_role_info.dart';
 import 'models/user_summary.dart';
+import 'models/wallet.dart';
+import 'models/profit.dart';
 import 'repositories/auth_repository.dart';
 import 'repositories/excursions_repository.dart';
 import 'repositories/bookings_repository.dart';
@@ -76,4 +78,19 @@ final allUsersFutureProvider = FutureProvider<List<UserSummary>>((ref) {
 final userRolesFutureProvider = FutureProvider<List<UserRoleInfo>>((ref) {
   final repository = ref.watch(usersRepositoryProvider);
   return repository.fetchRoles();
+});
+
+final userWalletFutureProvider = FutureProvider.family<WalletInfo, int>((ref, userId) {
+  final repository = ref.watch(walletRepositoryProvider);
+  return repository.fetchWallet(userId);
+});
+
+final userSalesFutureProvider = FutureProvider.family<SalesInfo, int>((ref, userId) {
+  final repository = ref.watch(walletRepositoryProvider);
+  return repository.fetchSales(userId);
+});
+
+final userProfitFutureProvider = FutureProvider.family<ProfitInfo, int>((ref, userId) {
+  final repository = ref.watch(walletRepositoryProvider);
+  return repository.fetchProfit(userId);
 });

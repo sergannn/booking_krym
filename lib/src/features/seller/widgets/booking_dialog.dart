@@ -1,16 +1,21 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-
 import '../../../data/models/booking.dart';
 import '../../../data/models/stop.dart';
+import '../../../data/models/excursion.dart';
 
 class BookingDialog extends StatefulWidget {
   const BookingDialog({
     super.key,
     required this.stops,
+    required this.tariffs,
+    this.initialSeatNumbers = const [],
+    this.lockSeatSelection = false,
   });
 
   final List<Stop> stops;
+  final Map<String, ExcursionTariff> tariffs;
+  final List<int> initialSeatNumbers;
+  final bool lockSeatSelection;
 
   @override
   State<BookingDialog> createState() => _BookingDialogState();
@@ -19,16 +24,29 @@ class BookingDialog extends StatefulWidget {
 class _BookingDialogState extends State<BookingDialog> {
   final _formKey = GlobalKey<FormState>();
   final _seatsController = TextEditingController();
-  final _priceController = TextEditingController();
   final _nameController = TextEditingController();
   final _phoneController = TextEditingController();
   PassengerType _passengerType = PassengerType.adult;
   int? _stopId;
+  Stop? _selectedStop;
+  late final List<int> _seatNumbers;
+
+  @override
+  void initState() {
+    super.initState();
+    _seatNumbers = List<int>.from(widget.initialSeatNumbers);
+    if (_seatNumbers.isNotEmpty) {
+      _seatsController.text = _seatNumbers.join(',');
+    }
+    if (widget.stops.isNotEmpty) {
+      _selectedStop = widget.stops.first;
+      _stopId = _selectedStop!.id;
+    }
+  }
 
   @override
   void dispose() {
     _seatsController.dispose();
-    _priceController.dispose();
     _nameController.dispose();
     _phoneController.dispose();
     super.dispose();
@@ -47,43 +65,29 @@ class _BookingDialogState extends State<BookingDialog> {
             children: [
               TextFormField(
                 controller: _seatsController,
+                enabled: !widget.lockSeatSelection,
                 decoration: const InputDecoration(
                   labelText: 'Места',
                   hintText: 'Например: 3,7,11',
                 ),
-                validator: (value) {
-                  if (value == null || value.trim().isEmpty) {
-                    return 'Введите номера мест';
-                  }
-                  final hasNumbers = value.split(',').map((item) =>
-                      int.tryParse(item.trim())).whereType<int>().isNotEmpty;
-                  if (!hasNumbers) {
-                    return 'Неверный формат';
-                  }
-                  return null;
-                },
+                validator: widget.lockSeatSelection
+                    ? null
+                    : (value) {
+                        if (value == null || value.trim().isEmpty) {
+                          return 'Введите номера мест';
+                        }
+                        final hasNumbers = value
+                            .split(',')
+                            .map((item) => int.tryParse(item.trim()))
+                            .whereType<int>()
+                            .isNotEmpty;
+                        if (!hasNumbers) {
+                          return 'Неверный формат';
+                        }
+                        return null;
+                      },
               ),
               const SizedBox(height: 12),
-              TextFormField(
-                controller: _priceController,
-                decoration: const InputDecoration(labelText: 'Цена за место'),
-                keyboardType:
-                    const TextInputType.numberWithOptions(decimal: true),
-                inputFormatters: [
-                  FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]')),
-                ],
-                validator: (value) {
-                  if (value == null || value.trim().isEmpty) {
-                    return 'Введите цену';
-                  }
-                  final numeric = value.replaceAll(',', '.');
-                  final parsed = double.tryParse(numeric);
-                  if (parsed == null || parsed <= 0) {
-                    return 'Некорректная цена';
-                  }
-                  return null;
-                },
-              ),
               const SizedBox(height: 12),
               TextFormField(
                 controller: _nameController,
@@ -126,6 +130,22 @@ class _BookingDialogState extends State<BookingDialog> {
                 decoration: const InputDecoration(labelText: 'Тип пассажира'),
               ),
               const SizedBox(height: 12),
+              Builder(
+                builder: (context) {
+                  final tariff = widget.tariffs[_passengerType.apiValue];
+                  final pricePerSeat = tariff?.price;
+                  if (pricePerSeat != null) {
+                    return Text(
+                      'Цена за место: ${pricePerSeat.toStringAsFixed(2)} ₽',
+                    );
+                  }
+                  return const Text(
+                    'Цена для выбранного типа не настроена',
+                    style: TextStyle(color: Colors.red, fontWeight: FontWeight.w600),
+                  );
+                },
+              ),
+              const SizedBox(height: 12),
               DropdownButtonFormField<int>(
                 value: _stopId,
                 decoration: const InputDecoration(labelText: 'Остановка'),
@@ -137,7 +157,16 @@ class _BookingDialogState extends State<BookingDialog> {
                       ),
                     )
                     .toList(),
-                onChanged: (value) => setState(() => _stopId = value),
+                onChanged: (value) {
+                  if (value == null) {
+                    return;
+                  }
+                  setState(() {
+                    _stopId = value;
+                    _selectedStop = widget.stops
+                        .firstWhere((stop) => stop.id == value);
+                  });
+                },
                 validator: (value) =>
                     value == null ? 'Выберите остановку' : null,
               ),
@@ -155,20 +184,36 @@ class _BookingDialogState extends State<BookingDialog> {
             if (!(_formKey.currentState?.validate() ?? false)) {
               return;
             }
-            final seatNumbers = _seatsController.text
-                .split(',')
-                .map((item) => int.tryParse(item.trim()))
-                .whereType<int>()
-                .toList();
+            final seatNumbers = widget.lockSeatSelection
+                ? _seatNumbers
+                : _seatsController.text
+                    .split(',')
+                    .map((item) => int.tryParse(item.trim()))
+                    .whereType<int>()
+                    .toList();
+            if (seatNumbers.isEmpty) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Добавьте хотя бы одно место')),
+              );
+              return;
+            }
+            final pricePerSeat =
+                widget.tariffs[_passengerType.apiValue]?.price;
+            if (pricePerSeat == null) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                    content: Text('Цена для выбранного типа не настроена')),
+              );
+              return;
+            }
             Navigator.of(context).pop(
               BookingDialogResult(
                 seatNumbers: seatNumbers,
-                price: double.parse(
-                    _priceController.text.replaceAll(',', '.')),
+                pricePerSeat: pricePerSeat,
                 customerName: _nameController.text.trim(),
                 customerPhone: _phoneController.text.trim(),
                 passengerType: _passengerType,
-                stopId: _stopId!,
+                stop: _selectedStop!,
               ),
             );
           },
@@ -182,17 +227,19 @@ class _BookingDialogState extends State<BookingDialog> {
 class BookingDialogResult {
   const BookingDialogResult({
     required this.seatNumbers,
-    required this.price,
+    required this.pricePerSeat,
     required this.customerName,
     required this.customerPhone,
     required this.passengerType,
-    required this.stopId,
+    required this.stop,
   });
 
   final List<int> seatNumbers;
-  final double price;
+  final double pricePerSeat;
   final String customerName;
   final String customerPhone;
   final PassengerType passengerType;
-  final int stopId;
+  final Stop stop;
+
+  int get stopId => stop.id;
 }

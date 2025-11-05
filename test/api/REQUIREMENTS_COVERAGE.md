@@ -75,3 +75,6 @@ test('cancellation reason is stored in wallet transaction description', () async
 
 **Рекомендация:** Добавить тест для проверки сохранения причины отмены в описании транзакции.
 
+
+
+

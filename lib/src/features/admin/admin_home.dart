@@ -75,7 +75,7 @@ class AdminHomePage extends StatelessWidget {
             _AdminBookingTab(),
             _AdminWalletTab(user: user),
             _PlaceholderTab(message: 'Статистика в разработке'),
-            _PlaceholderTab(message: 'Расписание в разработке'),
+            const _AdminScheduleTab(),
             UsersTab(currentUserId: user.id),
             const PricesTab(),
           ],
@@ -813,6 +813,145 @@ class _PlaceholderTab extends StatelessWidget {
   Widget build(BuildContext context) {
     return Center(
       child: Text(message, textAlign: TextAlign.center),
+    );
+  }
+}
+
+class _AdminScheduleTab extends ConsumerWidget {
+  const _AdminScheduleTab();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final scheduleAsync = ref.watch(scheduleFutureProvider);
+
+    return scheduleAsync.when(
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (error, _) => Center(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.error_outline, size: 48, color: Colors.red),
+              const SizedBox(height: 16),
+              Text('Ошибка загрузки расписания: $error'),
+              const SizedBox(height: 16),
+              ElevatedButton(
+                onPressed: () => ref.invalidate(scheduleFutureProvider),
+                child: const Text('Повторить'),
+              ),
+            ],
+          ),
+        ),
+      ),
+      data: (templates) {
+        if (templates.isEmpty) {
+          return const Center(
+            child: Text('Расписание пока не настроено'),
+          );
+        }
+
+        return RefreshIndicator(
+          onRefresh: () async {
+            ref.invalidate(scheduleFutureProvider);
+          },
+          child: ListView.builder(
+            padding: const EdgeInsets.all(16),
+            itemCount: templates.length,
+            itemBuilder: (context, index) {
+              final template = templates[index];
+              return Card(
+                margin: const EdgeInsets.only(bottom: 12),
+                child: ExpansionTile(
+                  leading: const Icon(Icons.calendar_today),
+                  title: Text(
+                    template.title,
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  subtitle: template.description.isNotEmpty
+                      ? Text(
+                          template.description,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        )
+                      : null,
+                  children: [
+                    if (template.description.isNotEmpty) ...[
+                      Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 8,
+                        ),
+                        child: Text(
+                          template.description,
+                          style: Theme.of(context).textTheme.bodyMedium,
+                        ),
+                      ),
+                      const Divider(),
+                    ],
+                    Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Расписание по дням недели:',
+                            style: Theme.of(context).textTheme.titleSmall,
+                          ),
+                          const SizedBox(height: 8),
+                          if (template.schedule.isEmpty)
+                            const Text(
+                              'Расписание не задано',
+                              style: TextStyle(
+                                fontStyle: FontStyle.italic,
+                                color: Colors.grey,
+                              ),
+                            )
+                          else
+                            ...template.schedule.map((day) {
+                              return Padding(
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 4),
+                                child: Row(
+                                  children: [
+                                    SizedBox(
+                                      width: 120,
+                                      child: Text(
+                                        day.dayName,
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .bodyMedium
+                                            ?.copyWith(
+                                              fontWeight: FontWeight.w500,
+                                            ),
+                                      ),
+                                    ),
+                                    Text(
+                                      day.time,
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .bodyMedium
+                                          ?.copyWith(
+                                            color: Theme.of(context)
+                                                .colorScheme
+                                                .primary,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            }),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+        );
+      },
     );
   }
 }

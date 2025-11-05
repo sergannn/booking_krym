@@ -63,7 +63,8 @@ class PricesTab extends ConsumerWidget {
                               Text(entry.value),
                               Text(
                                 '${excursion.priceFor(entry.key).toStringAsFixed(2)} ₽',
-                                style: const TextStyle(fontWeight: FontWeight.w600),
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.w600),
                               ),
                             ],
                           ),
@@ -139,9 +140,7 @@ class _PriceEditDialogState extends ConsumerState<PriceEditDialog> {
     _controllers = {
       for (final type in _typeOrder)
         type: TextEditingController(
-          text: widget.excursion
-              .priceFor(type)
-              .toStringAsFixed(2),
+          text: widget.excursion.priceFor(type).toStringAsFixed(2),
         ),
     };
   }
@@ -198,7 +197,8 @@ class _PriceEditDialogState extends ConsumerState<PriceEditDialog> {
       ),
       actions: [
         TextButton(
-          onPressed: _isSubmitting ? null : () => Navigator.of(context).pop(false),
+          onPressed:
+              _isSubmitting ? null : () => Navigator.of(context).pop(false),
           child: const Text('Отмена'),
         ),
         FilledButton(
@@ -235,6 +235,7 @@ class _PriceEditDialogState extends ConsumerState<PriceEditDialog> {
       await ref.read(excursionsRepositoryProvider).updateTariffs(
             excursionId: widget.excursion.id,
             prices: prices,
+            currentExcursion: widget.excursion,
           );
       if (mounted) {
         Navigator.of(context).pop(true);

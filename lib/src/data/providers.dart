@@ -8,6 +8,7 @@ import 'models/user_role_info.dart';
 import 'models/user_summary.dart';
 import 'models/wallet.dart';
 import 'models/profit.dart';
+import 'models/schedule_template.dart';
 import 'repositories/auth_repository.dart';
 import 'repositories/excursions_repository.dart';
 import 'repositories/bookings_repository.dart';
@@ -15,6 +16,7 @@ import 'repositories/assignments_repository.dart';
 import 'repositories/stops_repository.dart';
 import 'repositories/users_repository.dart';
 import 'repositories/wallet_repository.dart';
+import 'repositories/schedule_repository.dart';
 
 final apiClientProvider = Provider<ApiClient>((ref) {
   return ApiClient.instance;
@@ -55,6 +57,11 @@ final assignmentsRepositoryProvider = Provider<AssignmentsRepository>((ref) {
   return AssignmentsRepository(client);
 });
 
+final scheduleRepositoryProvider = Provider<ScheduleRepository>((ref) {
+  final client = ref.watch(apiClientProvider);
+  return ScheduleRepository(client);
+});
+
 final excursionsFutureProvider = FutureProvider<List<Excursion>>((ref) {
   final repository = ref.watch(excursionsRepositoryProvider);
   return repository.fetchExcursions();
@@ -80,17 +87,25 @@ final userRolesFutureProvider = FutureProvider<List<UserRoleInfo>>((ref) {
   return repository.fetchRoles();
 });
 
-final userWalletFutureProvider = FutureProvider.family<WalletInfo, int>((ref, userId) {
+final userWalletFutureProvider =
+    FutureProvider.family<WalletInfo, int>((ref, userId) {
   final repository = ref.watch(walletRepositoryProvider);
   return repository.fetchWallet(userId);
 });
 
-final userSalesFutureProvider = FutureProvider.family<SalesInfo, int>((ref, userId) {
+final userSalesFutureProvider =
+    FutureProvider.family<SalesInfo, int>((ref, userId) {
   final repository = ref.watch(walletRepositoryProvider);
   return repository.fetchSales(userId);
 });
 
-final userProfitFutureProvider = FutureProvider.family<ProfitInfo, int>((ref, userId) {
+final userProfitFutureProvider =
+    FutureProvider.family<ProfitInfo, int>((ref, userId) {
   final repository = ref.watch(walletRepositoryProvider);
   return repository.fetchProfit(userId);
+});
+
+final scheduleFutureProvider = FutureProvider<List<ScheduleTemplate>>((ref) {
+  final repository = ref.watch(scheduleRepositoryProvider);
+  return repository.fetchSchedule();
 });

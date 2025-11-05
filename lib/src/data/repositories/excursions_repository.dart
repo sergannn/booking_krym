@@ -60,18 +60,40 @@ class ExcursionsRepository {
   Future<Excursion> updateTariffs({
     required int excursionId,
     required Map<String, double> prices,
+    Excursion? currentExcursion,
   }) async {
+    // Если передана текущая экскурсия, используем комиссии из её тарифов
+    // Иначе получаем экскурсию для получения текущих комиссий
+    Excursion? fetchedExcursion =
+        currentExcursion ?? await fetchExcursion(excursionId);
+    if (fetchedExcursion == null) {
+      throw const FormatException('Экскурсия не найдена');
+    }
+    final Excursion excursion = fetchedExcursion;
+
+    // Формируем структуру с ценами и комиссиями
+    final pricesData = <String, Map<String, dynamic>>{};
+    for (final entry in prices.entries) {
+      final tariff = excursion.tariffs[entry.key];
+      pricesData[entry.key] = {
+        'price': entry.value,
+        'seller_commission_percent': tariff?.sellerCommissionPercent ?? 10.0,
+        'partner_commission_percent': tariff?.partnerCommissionPercent ?? 10.0,
+      };
+    }
+
     final response = await _client.putJson(
       '/api/excursions/$excursionId/prices',
       authenticated: true,
       body: {
-        'prices': prices,
+        'prices': pricesData,
       },
     );
 
     final data = response['data'] as Map<String, dynamic>?;
     if (data == null) {
-      throw const FormatException('Неверный ответ сервера при обновлении тарифов');
+      throw const FormatException(
+          'Неверный ответ сервера при обновлении тарифов');
     }
 
     return Excursion.fromJson(data);

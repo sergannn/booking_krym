@@ -67,22 +67,20 @@ class _BookingDialogState extends State<BookingDialog> {
                 controller: _seatsController,
                 enabled: !widget.lockSeatSelection,
                 decoration: const InputDecoration(
-                  labelText: 'Места',
-                  hintText: 'Например: 3,7,11',
+                  labelText: 'Место',
+                  hintText: 'Например: 3',
+                  helperText: 'Можно забронировать только одно место',
                 ),
+                keyboardType: TextInputType.number,
                 validator: widget.lockSeatSelection
                     ? null
                     : (value) {
                         if (value == null || value.trim().isEmpty) {
-                          return 'Введите номера мест';
+                          return 'Введите номер места';
                         }
-                        final hasNumbers = value
-                            .split(',')
-                            .map((item) => int.tryParse(item.trim()))
-                            .whereType<int>()
-                            .isNotEmpty;
-                        if (!hasNumbers) {
-                          return 'Неверный формат';
+                        final seatNumber = int.tryParse(value.trim());
+                        if (seatNumber == null || seatNumber <= 0) {
+                          return 'Введите корректный номер места';
                         }
                         return null;
                       },
@@ -141,7 +139,8 @@ class _BookingDialogState extends State<BookingDialog> {
                   }
                   return const Text(
                     'Цена для выбранного типа не настроена',
-                    style: TextStyle(color: Colors.red, fontWeight: FontWeight.w600),
+                    style: TextStyle(
+                        color: Colors.red, fontWeight: FontWeight.w600),
                   );
                 },
               ),
@@ -163,8 +162,8 @@ class _BookingDialogState extends State<BookingDialog> {
                   }
                   setState(() {
                     _stopId = value;
-                    _selectedStop = widget.stops
-                        .firstWhere((stop) => stop.id == value);
+                    _selectedStop =
+                        widget.stops.firstWhere((stop) => stop.id == value);
                   });
                 },
                 validator: (value) =>
@@ -186,19 +185,16 @@ class _BookingDialogState extends State<BookingDialog> {
             }
             final seatNumbers = widget.lockSeatSelection
                 ? _seatNumbers
-                : _seatsController.text
-                    .split(',')
-                    .map((item) => int.tryParse(item.trim()))
-                    .whereType<int>()
-                    .toList();
+                : [
+                    int.tryParse(_seatsController.text.trim()) ?? 0,
+                  ].where((n) => n > 0).toList();
             if (seatNumbers.isEmpty) {
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Добавьте хотя бы одно место')),
+                const SnackBar(content: Text('Введите номер места')),
               );
               return;
             }
-            final pricePerSeat =
-                widget.tariffs[_passengerType.apiValue]?.price;
+            final pricePerSeat = widget.tariffs[_passengerType.apiValue]?.price;
             if (pricePerSeat == null) {
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(

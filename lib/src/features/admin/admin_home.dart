@@ -386,9 +386,8 @@ class _AdminExcursionCard extends ConsumerWidget {
               alignment: WrapAlignment.center,
               children: excursion.busSeats.map((seat) {
                 final isAvailable = seat.status == 'available';
-                final color = isAvailable
-                    ? Colors.green.shade200
-                    : Colors.red.shade200;
+                final color =
+                    isAvailable ? Colors.green.shade200 : Colors.red.shade200;
                 return InkWell(
                   onTap: isAvailable
                       ? () => Navigator.of(dialogContext).pop(seat.seatNumber)
@@ -504,9 +503,8 @@ class _AdminWalletTabState extends ConsumerState<_AdminWalletTab> {
                         transaction.amount >= 0
                             ? Icons.arrow_downward
                             : Icons.arrow_upward,
-                        color: transaction.amount >= 0
-                            ? Colors.green
-                            : Colors.red,
+                        color:
+                            transaction.amount >= 0 ? Colors.green : Colors.red,
                       ),
                     ),
                     title: Text(transaction.description),
@@ -516,9 +514,8 @@ class _AdminWalletTabState extends ConsumerState<_AdminWalletTab> {
                     trailing: Text(
                       '${transaction.amount.toStringAsFixed(2)} ₽',
                       style: TextStyle(
-                        color: transaction.amount >= 0
-                            ? Colors.green
-                            : Colors.red,
+                        color:
+                            transaction.amount >= 0 ? Colors.green : Colors.red,
                       ),
                     ),
                   ),
@@ -745,7 +742,8 @@ class _AdminWalletTabState extends ConsumerState<_AdminWalletTab> {
                           children: group.bookings
                               .map(
                                 (booking) => ListTile(
-                                  title: Text('Место ${booking.seat.seatNumber}'),
+                                  title:
+                                      Text('Место ${booking.seat.seatNumber}'),
                                   subtitle: Text(
                                     'Бронировано: ${formatter.format(booking.bookedAt)}',
                                   ),
@@ -805,7 +803,6 @@ class _AdminWalletTabState extends ConsumerState<_AdminWalletTab> {
     }
   }
 }
-
 
 class _PlaceholderTab extends StatelessWidget {
   const _PlaceholderTab({required this.message});

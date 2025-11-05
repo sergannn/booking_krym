@@ -18,19 +18,22 @@ class ProfitInfo {
 
   factory ProfitInfo.fromJson(Map<String, dynamic> json) {
     final userJson = json['user'];
+    final userMap =
+        userJson is Map<String, dynamic> ? userJson : const <String, dynamic>{};
+    final totalsByTypeJson = json['totals_by_type'];
+    final totalsByTypeMap = totalsByTypeJson is Map<String, dynamic>
+        ? totalsByTypeJson
+        : const <String, dynamic>{};
+
     return ProfitInfo(
-      user: WalletUser.fromJson((userJson as Map<String, dynamic>?) ?? const {}),
+      user: WalletUser.fromJson(userMap),
       totalProfit: double.tryParse(json['total_profit'].toString()) ?? 0,
       breakdown: (json['breakdown'] as List<dynamic>? ?? const [])
           .map((item) => ProfitItem.fromJson(item as Map<String, dynamic>))
           .toList(),
-      totalsByType: _parseTotalsByType(
-        json['totals_by_type'] as Map<String, dynamic>? ?? const {},
-      ),
+      totalsByType: _parseTotalsByType(totalsByTypeMap),
       isPartner: (json['is_partner'] as bool?) ??
-          ((userJson is Map<String, dynamic>)
-              ? (userJson['is_partner'] as bool? ?? false)
-              : false),
+          (userMap['is_partner'] as bool? ?? false),
     );
   }
 

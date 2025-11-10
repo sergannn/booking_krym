@@ -5,6 +5,7 @@ import '../auth/auth_controller.dart';
 import '../auth/login_screen.dart';
 import '../seller/seller_home.dart';
 import '../admin/admin_home.dart';
+import '../staff/staff_home.dart';
 
 class AppShell extends ConsumerWidget {
   const AppShell({super.key});
@@ -43,8 +44,16 @@ class AppShell extends ConsumerWidget {
         }
         final normalizedRole = user.role.trim().toLowerCase();
         final isAdmin = normalizedRole.contains('admin') || user.roleId == 1;
+        final isDriver = user.roleId == 3;
+        final isGuide = normalizedRole.contains('гид') || 
+                        normalizedRole.contains('guide') ||
+                        normalizedRole.contains('экскурсовод');
+        
         if (isAdmin) {
           return AdminHomePage(user: user);
+        }
+        if (isDriver || isGuide) {
+          return StaffHomePage(user: user);
         }
         return SellerHomePage(user: user);
       },

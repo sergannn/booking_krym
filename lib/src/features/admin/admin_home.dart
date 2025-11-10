@@ -10,7 +10,7 @@ import '../../data/repositories/bookings_repository.dart';
 import '../../data/providers.dart';
 import '../auth/auth_controller.dart';
 import '../seller/widgets/booking_dialog.dart';
-import '../common/utils/ticket_generator.dart';
+import '../common/utils/pdf_downloader.dart';
 import '../common/widgets/cancellation_reason_dialog.dart';
 import 'widgets/users_tab.dart';
 import 'widgets/assign_staff_sheet.dart';
@@ -227,8 +227,14 @@ class _AdminExcursionCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // Определяем, доступна ли экскурсия для бронирования
+    final isAvailable = excursion.availableSeatsCount > 0 && !excursion.isPast;
+
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
+      color: isAvailable
+          ? null
+          : Colors.grey.shade200, // Серый фон для недоступных
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -324,16 +330,26 @@ class _AdminExcursionCard extends ConsumerWidget {
     final messenger = ScaffoldMessenger.of(context);
 
     try {
-      final response = await ref.read(bookingsRepositoryProvider).bookSeats(
-            BookSeatPayload(
+      // Используем новый формат если доступен, иначе старый
+      final payload = result.seats != null && result.seats!.isNotEmpty
+          ? BookSeatPayload(
+              excursionId: excursion.id,
+              seats: result.seats!,
+              customerName: result.customerName,
+              customerPhone: result.customerPhone,
+              stopId: result.stopId,
+            )
+          : BookSeatPayload(
               excursionId: excursion.id,
               seatNumbers: result.seatNumbers,
               customerName: result.customerName,
               customerPhone: result.customerPhone,
               passengerType: result.passengerType,
               stopId: result.stopId,
-            ),
-          );
+            );
+
+      final response =
+          await ref.read(bookingsRepositoryProvider).bookSeats(payload);
       if (!context.mounted) {
         return;
       }
@@ -348,22 +364,24 @@ class _AdminExcursionCard extends ConsumerWidget {
       );
       ref.invalidate(bookingsFutureProvider);
       ref.invalidate(excursionsFutureProvider);
-      final authState = ref.read(authControllerProvider);
-      final bookedBy = authState.value?.name ?? 'Администратор';
+
+      // Сохраняем/открываем PDF через backend
       try {
-        await TicketGenerator.generateAndShare(
-          excursion: excursion,
-          seatNumbers: result.seatNumbers,
-          pricePerSeat: result.pricePerSeat,
-          customerName: result.customerName,
-          customerPhone: result.customerPhone,
-          passengerType: result.passengerType,
-          stop: result.stop,
-          bookedBy: bookedBy,
-        );
+        final bookingId = response.firstBookingId;
+        if (bookingId != null) {
+          // Скачиваем PDF как байты
+          final pdfBytes = await ref
+              .read(bookingsRepositoryProvider)
+              .downloadTicketPdf(bookingId);
+          // Сохраняем/отправляем PDF (на мобильных) или скачиваем (на веб)
+          await PdfDownloader.saveAndSharePdf(
+            pdfBytes: pdfBytes,
+            filename: 'ticket-$bookingId.pdf',
+          );
+        }
       } catch (error) {
         messenger.showSnackBar(
-          SnackBar(content: Text('Не удалось сформировать билет: $error')),
+          SnackBar(content: Text('Не удалось сохранить билет: $error')),
         );
       }
     } catch (error) {
@@ -374,44 +392,79 @@ class _AdminExcursionCard extends ConsumerWidget {
   }
 
   Future<void> _showSeatSheet(BuildContext context, WidgetRef ref) async {
-    final seatNumber = await showDialog<int>(
+    final selectedSeats = <int>{};
+
+    final result = await showDialog<List<int>>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Схема мест'),
-        content: SingleChildScrollView(
-          child: Center(
-            child: Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              alignment: WrapAlignment.center,
-              children: excursion.busSeats.map((seat) {
-                final isAvailable = seat.status == 'available';
-                final color =
-                    isAvailable ? Colors.green.shade200 : Colors.red.shade200;
-                return InkWell(
-                  onTap: isAvailable
-                      ? () => Navigator.of(dialogContext).pop(seat.seatNumber)
-                      : null,
-                  child: Chip(
-                    label: Text('Место ${seat.seatNumber}'),
-                    backgroundColor: color,
-                  ),
-                );
-              }).toList(),
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: const Text('Схема мест'),
+          content: ConstrainedBox(
+            constraints: const BoxConstraints(maxHeight: 500),
+            child: SingleChildScrollView(
+              child: Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                alignment: WrapAlignment.center,
+                children: excursion.busSeats.map((seat) {
+                  final isAvailable = seat.status == 'available';
+                  final isSelected = selectedSeats.contains(seat.seatNumber);
+                  final color = isSelected
+                      ? Colors.blue.shade300
+                      : isAvailable
+                          ? Colors.green.shade200
+                          : Colors.red.shade200;
+                  return InkWell(
+                    onTap: isAvailable
+                        ? () {
+                            setState(() {
+                              if (isSelected) {
+                                selectedSeats.remove(seat.seatNumber);
+                              } else {
+                                selectedSeats.add(seat.seatNumber);
+                              }
+                            });
+                          }
+                        : null,
+                    child: Chip(
+                      label: Text('${seat.seatNumber}'),
+                      backgroundColor: color,
+                      labelStyle: TextStyle(
+                        fontWeight:
+                            isSelected ? FontWeight.bold : FontWeight.normal,
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
             ),
           ),
+          actions: [
+            if (selectedSeats.isNotEmpty)
+              TextButton(
+                onPressed: () {
+                  setState(() => selectedSeats.clear());
+                },
+                child: const Text('Очистить'),
+              ),
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Закрыть'),
+            ),
+            FilledButton(
+              onPressed: selectedSeats.isNotEmpty
+                  ? () => Navigator.of(dialogContext)
+                      .pop(selectedSeats.toList()..sort())
+                  : null,
+              child: Text('Выбрать (${selectedSeats.length})'),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(),
-            child: const Text('Закрыть'),
-          ),
-        ],
       ),
     );
 
-    if (seatNumber != null) {
-      await _book(context, ref, preselectedSeats: [seatNumber]);
+    if (result != null && result.isNotEmpty) {
+      await _book(context, ref, preselectedSeats: result);
     }
   }
 

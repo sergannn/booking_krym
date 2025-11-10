@@ -21,6 +21,9 @@ class ApiClient {
   late String _baseUrl;
   late TokenProvider _tokenProvider;
 
+  /// Получает base URL (публичный метод)
+  String get baseUrl => _baseUrl;
+
   void configure(
       {required String baseUrl, required TokenProvider tokenProvider}) {
     _baseUrl = baseUrl;
@@ -50,9 +53,15 @@ class ApiClient {
     String path, {
     Map<String, dynamic>? query,
     bool authenticated = false,
+    Map<String, String>? headers,
   }) async {
-    final headers = await _headers(authenticated: authenticated);
-    final response = await _client.get(_buildUri(path, query), headers: headers);
+    final baseHeaders = await _headers(authenticated: authenticated);
+    final allHeaders = {
+      ...baseHeaders,
+      if (headers != null) ...headers,
+    };
+    final response =
+        await _client.get(_buildUri(path, query), headers: allHeaders);
     _throwIfNeeded(response);
     return response;
   }

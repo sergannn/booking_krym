@@ -143,16 +143,30 @@ class BookingSeat {
 }
 
 class BookingResponse {
-  const BookingResponse({required this.message, this.errors});
+  const BookingResponse({
+    required this.message,
+    this.errors,
+    this.bookings,
+  });
 
   final String message;
   final List<String>? errors;
+  final List<Map<String, dynamic>>? bookings;
 
   factory BookingResponse.fromJson(Map<String, dynamic> json) {
     return BookingResponse(
       message: json['message'] as String? ?? '',
       errors: (json['errors'] as List<dynamic>?)?.cast<String>(),
+      bookings: (json['bookings'] as List<dynamic>?)
+          ?.map((e) => e as Map<String, dynamic>)
+          .toList(),
     );
+  }
+
+  /// Получает ID первого бронирования (для генерации PDF)
+  int? get firstBookingId {
+    if (bookings == null || bookings!.isEmpty) return null;
+    return bookings!.first['id'] as int?;
   }
 }
 

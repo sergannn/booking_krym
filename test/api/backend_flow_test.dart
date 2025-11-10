@@ -14,6 +14,7 @@ import 'dart:io';
 import 'package:booking_app/src/data/models/booking.dart';
 import 'package:booking_app/src/data/models/excursion.dart';
 import 'package:booking_app/src/data/models/stop.dart';
+import 'package:booking_app/src/features/common/utils/ticket_generator.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
@@ -1340,12 +1341,26 @@ void main() {
 
       expect(bookingResponse.message, isNotEmpty);
 
-      // Генерируем PDF билет (без sharePdf, только создание документа)
+      // Создаем PDF документ используя TicketGenerator с поддержкой кириллицы
       final pdf = pw.Document();
       final dateFormatter = DateFormat('dd.MM.yyyy HH:mm');
-      final total = pricePerSeat * 1; // одно место
+      final total = pricePerSeat * 1;
       final ticketNumber =
           'T-$excursionId-${DateTime.now().millisecondsSinceEpoch}-${1000 + DateTime.now().millisecond % 9000}';
+
+      // Загружаем стили с кириллическим шрифтом
+      final baseTextStyle = await TicketGenerator.textStyle();
+      final boldTextStyle =
+          await TicketGenerator.textStyle(fontWeight: pw.FontWeight.bold);
+      final titleTextStyle = await TicketGenerator.textStyle(
+          fontSize: 24, fontWeight: pw.FontWeight.bold);
+      final subtitleTextStyle = await TicketGenerator.textStyle(
+          fontSize: 20, fontWeight: pw.FontWeight.bold);
+      final sectionTextStyle = await TicketGenerator.textStyle(
+          fontSize: 16, fontWeight: pw.FontWeight.bold);
+      final smallTextStyle = await TicketGenerator.textStyle(fontSize: 10);
+      final totalTextStyle = await TicketGenerator.textStyle(
+          fontSize: 14, fontWeight: pw.FontWeight.bold);
 
       pdf.addPage(
         pw.Page(
@@ -1357,70 +1372,73 @@ void main() {
               children: [
                 pw.Text(
                   'Электронный билет',
-                  style: pw.TextStyle(
-                    fontSize: 24,
-                    fontWeight: pw.FontWeight.bold,
-                  ),
+                  style: titleTextStyle,
                 ),
                 pw.SizedBox(height: 8),
-                pw.Text('Номер: $ticketNumber'),
+                pw.Text('Номер: $ticketNumber', style: baseTextStyle),
                 pw.SizedBox(height: 24),
                 pw.Text(
                   excursion.title,
-                  style: pw.TextStyle(
-                    fontSize: 20,
-                    fontWeight: pw.FontWeight.bold,
-                  ),
+                  style: subtitleTextStyle,
                 ),
                 pw.SizedBox(height: 8),
                 pw.Text(
-                    'Дата и время: ${dateFormatter.format(excursion.dateTime)}'),
-                pw.Text('Остановка: ${stop.name}'),
+                    'Дата и время: ${dateFormatter.format(excursion.dateTime)}',
+                    style: baseTextStyle),
+                pw.Text('Остановка: ${stop.name}', style: baseTextStyle),
                 pw.SizedBox(height: 16),
                 pw.Divider(),
                 pw.SizedBox(height: 16),
                 pw.Text(
                   'Покупатель',
-                  style: pw.TextStyle(
-                    fontWeight: pw.FontWeight.bold,
-                    fontSize: 16,
-                  ),
+                  style: sectionTextStyle,
                 ),
                 pw.SizedBox(height: 8),
-                pw.Text('Имя: $testCustomerName'),
-                pw.Text('Телефон: $testCustomerPhone'),
-                pw.Text('Тип пассажира: Взрослый'),
+                pw.Text('Имя: $testCustomerName', style: baseTextStyle),
+                pw.Text('Телефон: $testCustomerPhone', style: baseTextStyle),
                 pw.SizedBox(height: 16),
                 pw.Text(
-                  'Места',
-                  style: pw.TextStyle(
-                    fontWeight: pw.FontWeight.bold,
-                    fontSize: 16,
-                  ),
+                  'Пассажиры',
+                  style: sectionTextStyle,
                 ),
                 pw.SizedBox(height: 8),
-                pw.Text('Номера мест: $seatNumber'),
-                pw.Text('Количество мест: 1'),
+                pw.Padding(
+                  padding: const pw.EdgeInsets.only(bottom: 8),
+                  child: pw.Column(
+                    crossAxisAlignment: pw.CrossAxisAlignment.start,
+                    children: [
+                      pw.Text(
+                        'Место №$seatNumber - Взрослый',
+                        style: boldTextStyle,
+                      ),
+                      pw.Text(
+                        'Цена: ${pricePerSeat.toStringAsFixed(2)} ₽',
+                        style: baseTextStyle,
+                      ),
+                    ],
+                  ),
+                ),
                 pw.SizedBox(height: 16),
                 pw.Text(
                   'Оплата',
-                  style: pw.TextStyle(
-                    fontWeight: pw.FontWeight.bold,
-                    fontSize: 16,
-                  ),
+                  style: sectionTextStyle,
                 ),
                 pw.SizedBox(height: 8),
-                pw.Text('Цена за место: ${pricePerSeat.toStringAsFixed(2)} ₽'),
-                pw.Text('Итого к оплате: ${total.toStringAsFixed(2)} ₽'),
+                pw.Text('Количество мест: 1', style: baseTextStyle),
+                pw.Text(
+                  'Итого к оплате: ${total.toStringAsFixed(2)} ₽',
+                  style: totalTextStyle,
+                ),
                 pw.SizedBox(height: 16),
                 pw.Divider(),
                 pw.SizedBox(height: 16),
-                pw.Text('Продавец: ${seller!.name}'),
-                pw.Text('Создан: ${dateFormatter.format(DateTime.now())}'),
+                pw.Text('Продавец: ${seller!.name}', style: baseTextStyle),
+                pw.Text('Создан: ${dateFormatter.format(DateTime.now())}',
+                    style: baseTextStyle),
                 pw.SizedBox(height: 16),
                 pw.Text(
                   'Пожалуйста, предъявите этот билет при посадке. Перенос и отмена возможны не позднее чем за 24 часа до начала экскурсии.',
-                  style: pw.TextStyle(fontSize: 10),
+                  style: smallTextStyle,
                 ),
               ],
             );

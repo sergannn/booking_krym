@@ -16,9 +16,22 @@ class StaffHomePage extends ConsumerWidget {
     final excursionsAsync = ref.watch(excursionsFutureProvider);
     final formatter = DateFormat('dd.MM.yyyy HH:mm');
 
+    // Определяем, водитель это или гид
+    final isDriver = user.roleId == 3;
+    final normalizedRole = user.role.trim().toLowerCase();
+    final isGuide = normalizedRole.contains('гид') || 
+                    normalizedRole.contains('guide') ||
+                    normalizedRole.contains('экскурсовод');
+    
+    final appBarTitle = isDriver 
+        ? 'Кабинет водителя' 
+        : isGuide 
+            ? 'Кабинет экскурсовода'
+            : 'Расписание — ${user.name}';
+
     return Scaffold(
       appBar: AppBar(
-        title: Text('Расписание — ${user.name}'),
+        title: Text(appBarTitle),
         actions: [
           IconButton(
             tooltip: 'Выйти',

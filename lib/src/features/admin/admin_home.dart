@@ -8,6 +8,7 @@ import '../../data/models/user.dart';
 import '../../data/models/booking.dart';
 import '../../data/repositories/bookings_repository.dart';
 import '../../data/providers.dart';
+import '../../core/api/api_helpers.dart';
 import '../auth/auth_controller.dart';
 import '../seller/widgets/booking_dialog.dart';
 import '../common/utils/pdf_downloader.dart';
@@ -74,7 +75,7 @@ class AdminHomePage extends StatelessWidget {
           children: [
             _AdminBookingTab(),
             _AdminWalletTab(user: user),
-            _PlaceholderTab(message: 'Статистика в разработке'),
+            const _AdminStatisticsTab(),
             const _AdminScheduleTab(),
             UsersTab(currentUserId: user.id),
             const PricesTab(),
@@ -85,11 +86,33 @@ class AdminHomePage extends StatelessWidget {
   }
 }
 
-class _AdminBookingTab extends ConsumerWidget {
+class _AdminBookingTab extends ConsumerStatefulWidget {
   const _AdminBookingTab();
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_AdminBookingTab> createState() => _AdminBookingTabState();
+}
+
+class _AdminBookingTabState extends ConsumerState<_AdminBookingTab> {
+  DateTime? _selectedDate;
+
+  Future<void> _selectDate(BuildContext context) async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _selectedDate ?? DateTime.now(),
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2100),
+      locale: const Locale('ru', 'RU'),
+    );
+    if (picked != null) {
+      setState(() {
+        _selectedDate = picked;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final excursionsAsync = ref.watch(excursionsFutureProvider);
     final bookingsAsync = ref.watch(bookingsFutureProvider);
     final formatter = DateFormat('dd.MM.yyyy • HH:mm');
@@ -121,10 +144,36 @@ class _AdminBookingTab extends ConsumerWidget {
                   ),
               ],
               const SizedBox(height: 24),
-              Text(
-                'Мои бронирования',
-                style: Theme.of(context).textTheme.titleMedium,
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Мои бронирования',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  OutlinedButton.icon(
+                    icon: const Icon(Icons.calendar_today, size: 18),
+                    label: Text(
+                      _selectedDate == null
+                          ? 'Выбрать дату'
+                          : DateFormat('dd.MM.yyyy').format(_selectedDate!),
+                    ),
+                    onPressed: () => _selectDate(context),
+                  ),
+                ],
               ),
+              if (_selectedDate != null) ...[
+                const SizedBox(height: 8),
+                TextButton.icon(
+                  icon: const Icon(Icons.clear, size: 18),
+                  label: const Text('Сбросить фильтр'),
+                  onPressed: () {
+                    setState(() {
+                      _selectedDate = null;
+                    });
+                  },
+                ),
+              ],
               const SizedBox(height: 8),
               bookingsAsync.when(
                 loading: () => const Padding(
@@ -136,15 +185,36 @@ class _AdminBookingTab extends ConsumerWidget {
                   child: Text('Не удалось загрузить бронирования: $error'),
                 ),
                 data: (groups) {
-                  if (groups.isEmpty) {
-                    return const Text('Нет активных бронирований');
+                  // Фильтруем по выбранной дате
+                  final filteredGroups = _selectedDate == null
+                      ? groups
+                      : groups.where((group) {
+                          final excursionDate = DateTime(
+                            group.excursion.dateTime.year,
+                            group.excursion.dateTime.month,
+                            group.excursion.dateTime.day,
+                          );
+                          final selectedDateOnly = DateTime(
+                            _selectedDate!.year,
+                            _selectedDate!.month,
+                            _selectedDate!.day,
+                          );
+                          return excursionDate == selectedDateOnly;
+                        }).toList();
+
+                  if (filteredGroups.isEmpty) {
+                    return Text(
+                      _selectedDate == null
+                          ? 'Нет активных бронирований'
+                          : 'Нет бронирований на выбранную дату',
+                    );
                   }
                   return ListView.builder(
                     shrinkWrap: true,
                     physics: const NeverScrollableScrollPhysics(),
-                    itemCount: groups.length,
+                    itemCount: filteredGroups.length,
                     itemBuilder: (context, index) {
-                      final group = groups[index];
+                      final group = filteredGroups[index];
                       final subFormatter = DateFormat('dd.MM.yyyy HH:mm');
                       return Card(
                         margin: const EdgeInsets.only(bottom: 12),
@@ -152,6 +222,7 @@ class _AdminBookingTab extends ConsumerWidget {
                           title: Text(group.excursion.title),
                           subtitle: Text(
                             '${subFormatter.format(group.excursion.dateTime)} • ${group.bookings.length} мест',
+                            style: const TextStyle(fontWeight: FontWeight.bold),
                           ),
                           children: group.bookings
                               .map(
@@ -249,6 +320,8 @@ class _AdminExcursionCard extends ConsumerWidget {
             ),
             Text(
                 'Свободно мест: ${excursion.availableSeatsCount} / ${excursion.maxSeats}'),
+            Text(
+                'Забронировано мест: ${excursion.bookedSeatsCount} / ${excursion.maxSeats}'),
             if (excursion.assignedStaff.isNotEmpty) ...[
               const SizedBox(height: 12),
               Wrap(
@@ -269,10 +342,7 @@ class _AdminExcursionCard extends ConsumerWidget {
                     .toList(),
               ),
             ],
-            if (excursion.description.isNotEmpty) ...[
-              const SizedBox(height: 12),
-              Text(excursion.description),
-            ],
+            // Описание скрыто для лучшей видимости
             const SizedBox(height: 12),
             Row(
               children: [
@@ -857,19 +927,6 @@ class _AdminWalletTabState extends ConsumerState<_AdminWalletTab> {
   }
 }
 
-class _PlaceholderTab extends StatelessWidget {
-  const _PlaceholderTab({required this.message});
-
-  final String message;
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Text(message, textAlign: TextAlign.center),
-    );
-  }
-}
-
 class _AdminScheduleTab extends ConsumerWidget {
   const _AdminScheduleTab();
 
@@ -1227,3 +1284,184 @@ class _CreateExcursionDialogState
     );
   }
 }
+
+class _AdminStatisticsTab extends ConsumerWidget {
+  const _AdminStatisticsTab();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final statisticsAsync = ref.watch(_statisticsFutureProvider);
+    final formatter = DateFormat('dd.MM.yyyy HH:mm');
+
+    return statisticsAsync.when(
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (error, _) => Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text('Ошибка загрузки статистики: $error'),
+            const SizedBox(height: 16),
+            ElevatedButton(
+              onPressed: () => ref.invalidate(_statisticsFutureProvider),
+              child: const Text('Повторить'),
+            ),
+          ],
+        ),
+      ),
+      data: (data) {
+        final statistics = data['statistics'] as List<dynamic>;
+        final totalNetProfit = data['total_net_profit'] as double;
+
+        if (statistics.isEmpty) {
+          return const Center(child: Text('Нет данных для отображения'));
+        }
+
+        return RefreshIndicator(
+          onRefresh: () async {
+            ref.invalidate(_statisticsFutureProvider);
+            await ref.read(_statisticsFutureProvider.future);
+          },
+          child: ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              Card(
+                color: Colors.green.shade50,
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    children: [
+                      Text(
+                        'Общая чистая прибыль',
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        '${totalNetProfit.toStringAsFixed(2)} ₽',
+                        style: Theme.of(context)
+                            .textTheme
+                            .headlineMedium
+                            ?.copyWith(
+                              color: Colors.green.shade700,
+                              fontWeight: FontWeight.bold,
+                            ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              ...statistics.map((stat) {
+                final excursion = stat['excursion'] as Map<String, dynamic>;
+                final dateTime =
+                    DateTime.parse(excursion['date_time'] as String);
+                return Card(
+                  margin: const EdgeInsets.only(bottom: 12),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          excursion['title'] as String,
+                          style: Theme.of(context).textTheme.titleMedium,
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          formatter.format(dateTime),
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                        const Divider(),
+                        _StatRow(
+                          label: 'Выручка',
+                          value:
+                              '${(stat['total_revenue'] as double).toStringAsFixed(2)} ₽',
+                          color: Colors.blue,
+                        ),
+                        _StatRow(
+                          label: 'Комиссии продавцов',
+                          value:
+                              '-${(stat['seller_commissions'] as double).toStringAsFixed(2)} ₽',
+                          color: Colors.orange,
+                        ),
+                        _StatRow(
+                          label: 'Расходы на персонал',
+                          value:
+                              '-${(stat['staff_costs'] as double).toStringAsFixed(2)} ₽',
+                          color: Colors.purple,
+                        ),
+                        const Divider(),
+                        _StatRow(
+                          label: 'Чистая прибыль',
+                          value:
+                              '${(stat['net_profit'] as double).toStringAsFixed(2)} ₽',
+                          color: (stat['net_profit'] as double) >= 0
+                              ? Colors.green
+                              : Colors.red,
+                          isBold: true,
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Бронирований: ${stat['bookings_count'] as int}',
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }).toList(),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _StatRow extends StatelessWidget {
+  const _StatRow({
+    required this.label,
+    required this.value,
+    required this.color,
+    this.isBold = false,
+  });
+
+  final String label;
+  final String value;
+  final Color color;
+  final bool isBold;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              fontWeight: isBold ? FontWeight.bold : FontWeight.normal,
+            ),
+          ),
+          Text(
+            value,
+            style: TextStyle(
+              color: color,
+              fontWeight: isBold ? FontWeight.bold : FontWeight.normal,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+final _statisticsFutureProvider =
+    FutureProvider<Map<String, dynamic>>((ref) async {
+  final client = ref.read(apiClientProvider);
+  final response = await client.getJson(
+    '/api/excursions/statistics',
+    authenticated: true,
+  );
+  return response;
+});

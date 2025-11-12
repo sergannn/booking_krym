@@ -75,6 +75,9 @@ class _ExcursionsTab extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final authState = ref.watch(authControllerProvider);
+    final user = authState.value;
+    if (user == null) return const SizedBox.shrink();
     final excursionsAsync = ref.watch(excursionsFutureProvider);
     final formatter = DateFormat('HH:mm');
 
@@ -109,6 +112,7 @@ class _ExcursionsTab extends ConsumerWidget {
                 date: DateFormat('EEEE, dd MMMM yyyy', 'ru_RU').format(date),
                 excursions: dayItems,
                 formatter: formatter,
+                user: user,
               );
             },
           ),
@@ -123,11 +127,13 @@ class _ExcursionDaySection extends StatelessWidget {
     required this.date,
     required this.excursions,
     required this.formatter,
+    required this.user,
   });
 
   final String date;
   final List<Excursion> excursions;
   final DateFormat formatter;
+  final User user;
 
   @override
   Widget build(BuildContext context) {
@@ -143,7 +149,11 @@ class _ExcursionDaySection extends StatelessWidget {
         ),
         const SizedBox(height: 12),
         for (final excursion in excursions)
-          _ExcursionTile(excursion: excursion, formatter: formatter),
+          _ExcursionTile(
+            excursion: excursion,
+            formatter: formatter,
+            user: user,
+          ),
         const SizedBox(height: 24),
       ],
     );
@@ -151,10 +161,15 @@ class _ExcursionDaySection extends StatelessWidget {
 }
 
 class _ExcursionTile extends ConsumerWidget {
-  const _ExcursionTile({required this.excursion, required this.formatter});
+  const _ExcursionTile({
+    required this.excursion,
+    required this.formatter,
+    required this.user,
+  });
 
   final Excursion excursion;
   final DateFormat formatter;
+  final User user;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -320,13 +335,20 @@ class _ExcursionTile extends ConsumerWidget {
                 children: excursion.busSeats.map((seat) {
                   final isAvailable = seat.status == 'available';
                   final isSelected = selectedSeats.contains(seat.seatNumber);
+                  // Места 1 и 2 могут продавать только администраторы (roleId == 1)
+                  final isRestrictedSeat = [1, 2].contains(seat.seatNumber);
+                  final isAdmin = user.roleId == 1 || user.isSuperUser;
+                  final canSelect =
+                      isAvailable && (!isRestrictedSeat || isAdmin);
                   final color = isSelected
                       ? Colors.blue.shade300
-                      : isAvailable
+                      : canSelect
                           ? Colors.green.shade200
-                          : Colors.red.shade200;
+                          : isRestrictedSeat
+                              ? Colors.orange.shade200
+                              : Colors.red.shade200;
                   return InkWell(
-                    onTap: isAvailable
+                    onTap: canSelect
                         ? () {
                             setState(() {
                               if (isSelected) {

@@ -71,6 +71,7 @@ class BookingItem {
     required this.passengerType,
     required this.stop,
     required this.bookedAt,
+    this.bookedBy,
   });
 
   final int id;
@@ -82,6 +83,7 @@ class BookingItem {
   final PassengerType passengerType;
   final Stop? stop;
   final DateTime bookedAt;
+  final int? bookedBy; // ID пользователя, который создал бронирование
 
   factory BookingItem.fromJson(Map<String, dynamic> json) {
     BookingSeat parseSeat() {
@@ -119,6 +121,7 @@ class BookingItem {
           ? null
           : Stop.fromJson(json['stop'] as Map<String, dynamic>),
       bookedAt: parseBookedAt(),
+      bookedBy: json['booked_by'] as int?,
     );
   }
 }

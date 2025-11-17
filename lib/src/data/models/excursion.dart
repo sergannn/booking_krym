@@ -39,8 +39,14 @@ class Excursion {
     final pricesJson = json['prices'] as List<dynamic>?;
     final dateTime = DateTime.parse(json['date_time'] as String);
     // Создаем date в том же часовом поясе, что и dateTime
-    final date = DateTime(dateTime.year, dateTime.month, dateTime.day, 
-        dateTime.hour, dateTime.minute, dateTime.second, dateTime.millisecond, 
+    final date = DateTime(
+        dateTime.year,
+        dateTime.month,
+        dateTime.day,
+        dateTime.hour,
+        dateTime.minute,
+        dateTime.second,
+        dateTime.millisecond,
         dateTime.microsecond);
     return Excursion(
       id: json['id'] as int,
@@ -64,7 +70,8 @@ class Excursion {
           : seatsJson
               .map((seat) => BusSeat.fromJson(seat as Map<String, dynamic>))
               .toList(),
-      tariffs: _parseTariffs(pricesJson, double.parse(json['price'].toString())),
+      tariffs:
+          _parseTariffs(pricesJson, double.parse(json['price'].toString())),
     );
   }
 
@@ -104,7 +111,8 @@ class Excursion {
         continue;
       }
 
-      final priceValue = double.tryParse(json['price']?.toString() ?? '') ?? defaultPrice;
+      final priceValue =
+          double.tryParse(json['price']?.toString() ?? '') ?? defaultPrice;
       final seller = double.tryParse(
             json['seller_commission_percent']?.toString() ?? '',
           ) ??

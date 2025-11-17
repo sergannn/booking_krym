@@ -66,7 +66,9 @@ class WalletTransactionItem {
       booking: json['booking'] == null
           ? null
           : BookingItem.fromJson(json['booking'] as Map<String, dynamic>),
-      createdAt: DateTime.parse(json['created_at'] as String),
+      createdAt: json['created_at'] != null && json['created_at'] is String
+          ? DateTime.parse(json['created_at'] as String)
+          : DateTime.now(),
     );
   }
 }

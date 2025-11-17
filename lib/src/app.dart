@@ -5,6 +5,7 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'core/api/api_client.dart';
 import 'core/app_config.dart';
 import 'core/storage/token_storage.dart';
+import 'core/services/notification_service.dart';
 import 'features/common/app_shell.dart';
 
 class BookingAppBootstrap {
@@ -20,6 +21,8 @@ class BookingAppBootstrap {
       baseUrl: AppConfig.apiBaseUrl,
       tokenProvider: TokenStorage.instance,
     );
+    // Инициализируем сервис уведомлений
+    await NotificationService().initialize();
     _initialized = true;
   }
 }

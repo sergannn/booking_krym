@@ -17,13 +17,22 @@ class UsersTab extends ConsumerStatefulWidget {
   ConsumerState<UsersTab> createState() => _UsersTabState();
 }
 
-class _UsersTabState extends ConsumerState<UsersTab> {
+class _UsersTabState extends ConsumerState<UsersTab>
+    with SingleTickerProviderStateMixin {
   final _searchController = TextEditingController();
   String _query = '';
+  late TabController _tabController;
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 3, vsync: this);
+  }
 
   @override
   void dispose() {
     _searchController.dispose();
+    _tabController.dispose();
     super.dispose();
   }
 
@@ -31,12 +40,11 @@ class _UsersTabState extends ConsumerState<UsersTab> {
   Widget build(BuildContext context) {
     final usersAsync = ref.watch(allUsersFutureProvider);
 
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
             children: [
               Expanded(
                 child: TextField(
@@ -62,7 +70,7 @@ class _UsersTabState extends ConsumerState<UsersTab> {
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
                         content: Text(
-                          'Пользователь "${created.name}" создан. Логин: ${created.email}',
+                          'Пользователь "${created.name}" создан. Логин: ${created.email}, Пароль: ${created.password ?? "не установлен"}',
                         ),
                       ),
                     );
@@ -71,82 +79,138 @@ class _UsersTabState extends ConsumerState<UsersTab> {
               ),
             ],
           ),
-          const SizedBox(height: 16),
-          Expanded(
-            child: usersAsync.when(
-              loading: () => const Center(child: CircularProgressIndicator()),
-              error: (error, _) => _UsersError(message: '$error'),
-              data: (users) {
-                final filtered = users.where((user) {
-                  if (_query.trim().isEmpty) {
-                    return true;
-                  }
-                  final q = _query.toLowerCase();
-                  return user.name.toLowerCase().contains(q) ||
-                      user.email.toLowerCase().contains(q);
-                }).toList();
-
-                if (filtered.isEmpty) {
-                  return const Center(
-                    child: Text('Сотрудников пока нет'),
-                  );
-                }
-
-                return RefreshIndicator(
-                  onRefresh: () async {
-                    ref.invalidate(allUsersFutureProvider);
-                    await ref.read(allUsersFutureProvider.future);
-                  },
-                  child: ListView.separated(
-                    itemCount: filtered.length,
-                    separatorBuilder: (_, __) => const Divider(height: 1),
-                    itemBuilder: (context, index) {
-                      final user = filtered[index];
-                      return ListTile(
-                        leading: CircleAvatar(
-                          child: Text(user.name.isNotEmpty
-                              ? user.name[0].toUpperCase()
-                              : '?'),
-                        ),
-                        title: Text(user.name),
-                        subtitle: Text('${user.email} • ${user.roleName}'),
-                        trailing: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            if (user.balance > 0)
-                              Padding(
-                                padding:
-                                    const EdgeInsets.symmetric(horizontal: 8),
-                                child: Text(
-                                  '${user.balance.toStringAsFixed(2)} ₽',
-                                  style: const TextStyle(color: Colors.green),
-                                ),
-                              ),
-                            PopupMenuButton<_UserAction>(
-                              onSelected: (action) {
-                                if (action == _UserAction.delete) {
-                                  _deleteUser(context, user);
-                                }
-                              },
-                              itemBuilder: (context) => [
-                                const PopupMenuItem(
-                                  value: _UserAction.delete,
-                                  child: Text('Удалить'),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                        onTap: () => _openWallet(context, user),
-                      );
-                    },
-                  ),
-                );
-              },
-            ),
+        ),
+        TabBar(
+          controller: _tabController,
+          tabs: const [
+            Tab(text: 'Все'),
+            Tab(text: 'Водители'),
+            Tab(text: 'Гиды'),
+          ],
+        ),
+        Expanded(
+          child: TabBarView(
+            controller: _tabController,
+            children: [
+              _buildUsersList(usersAsync, null),
+              _buildUsersList(usersAsync, 3), // role_id для водителей
+              _buildUsersList(usersAsync, null,
+                  isGuide: true), // гиды определяются по назначениям
+            ],
           ),
-        ],
-      ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildUsersList(
+    AsyncValue<List<UserSummary>> usersAsync,
+    int? roleId, {
+    bool isGuide = false,
+  }) {
+    return usersAsync.when(
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (error, _) => _UsersError(message: '$error'),
+      data: (users) {
+        // Фильтруем по роли или по назначениям
+        List<UserSummary> filtered = users;
+        if (roleId != null) {
+          filtered = users.where((user) => user.roleId == roleId).toList();
+        } else if (isGuide) {
+          // Для гидов нужно проверить назначения - пока показываем всех с ролью, которая может быть гидом
+          // В будущем можно добавить проверку через API
+          filtered = users.where((user) {
+            final roleName = user.roleName.toLowerCase();
+            return roleName.contains('гид') || roleName.contains('guide');
+          }).toList();
+        }
+
+        // Применяем поиск
+        if (_query.trim().isNotEmpty) {
+          final q = _query.toLowerCase();
+          filtered = filtered.where((user) {
+            return user.name.toLowerCase().contains(q) ||
+                user.email.toLowerCase().contains(q);
+          }).toList();
+        }
+
+        if (filtered.isEmpty) {
+          return const Center(
+            child: Text('Сотрудников пока нет'),
+          );
+        }
+
+        return RefreshIndicator(
+          onRefresh: () async {
+            ref.invalidate(allUsersFutureProvider);
+            await ref.read(allUsersFutureProvider.future);
+          },
+          child: ListView.separated(
+            padding: const EdgeInsets.all(16),
+            itemCount: filtered.length,
+            separatorBuilder: (_, __) => const Divider(height: 1),
+            itemBuilder: (context, index) {
+              final user = filtered[index];
+              return ListTile(
+                leading: CircleAvatar(
+                  child: Text(
+                      user.name.isNotEmpty ? user.name[0].toUpperCase() : '?'),
+                ),
+                title: Text(user.name),
+                subtitle: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('${user.email} • ${user.roleName}'),
+                    if (user.password != null) ...[
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          const Icon(Icons.lock, size: 14),
+                          const SizedBox(width: 4),
+                          Text(
+                            'Пароль: ${user.password}',
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ],
+                ),
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (user.balance > 0)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                        child: Text(
+                          '${user.balance.toStringAsFixed(2)} ₽',
+                          style: const TextStyle(color: Colors.green),
+                        ),
+                      ),
+                    PopupMenuButton<_UserAction>(
+                      onSelected: (action) {
+                        if (action == _UserAction.delete) {
+                          _deleteUser(context, user);
+                        }
+                      },
+                      itemBuilder: (context) => [
+                        const PopupMenuItem(
+                          value: _UserAction.delete,
+                          child: Text('Удалить'),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+                onTap: () => _openWallet(context, user),
+              );
+            },
+          ),
+        );
+      },
     );
   }
 
@@ -162,7 +226,8 @@ class _UsersTabState extends ConsumerState<UsersTab> {
   Future<void> _deleteUser(BuildContext context, UserSummary user) async {
     if (user.id == widget.currentUserId) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Нельзя удалить собственного пользователя')),
+        const SnackBar(
+            content: Text('Нельзя удалить собственного пользователя')),
       );
       return;
     }

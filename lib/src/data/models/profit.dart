@@ -89,7 +89,9 @@ class ProfitItem {
           double.tryParse(json['commission_percent']?.toString() ?? '') ?? 0,
       commissionAmount:
           double.tryParse(json['commission_amount']?.toString() ?? '') ?? 0,
-      bookedAt: DateTime.parse(json['booked_at'] as String),
+      bookedAt: json['booked_at'] != null && json['booked_at'] is String
+          ? DateTime.parse(json['booked_at'] as String)
+          : DateTime.now(),
     );
   }
 }
@@ -106,10 +108,14 @@ class ProfitExcursion {
   final DateTime dateTime;
 
   factory ProfitExcursion.fromJson(Map<String, dynamic> json) {
+    final dateTimeStr = json['date_time'];
+    final dateTime = dateTimeStr != null && dateTimeStr is String
+        ? DateTime.parse(dateTimeStr)
+        : DateTime.now();
     return ProfitExcursion(
       id: json['id'] as int,
       title: json['title'] as String? ?? '',
-      dateTime: DateTime.parse(json['date_time'] as String),
+      dateTime: dateTime,
     );
   }
 }

@@ -6,6 +6,7 @@ class UserSummary {
     required this.roleName,
     required this.roleId,
     required this.balance,
+    this.password,
   });
 
   final int id;
@@ -14,6 +15,7 @@ class UserSummary {
   final String roleName;
   final int roleId;
   final double balance;
+  final String? password;
 
   factory UserSummary.fromJson(Map<String, dynamic> json) {
     String roleName = 'Unknown';
@@ -27,9 +29,8 @@ class UserSummary {
       }
     }
 
-    final roleId = json['role_id'] as int? ??
-        json['moonshine_user_role_id'] as int? ??
-        0;
+    final roleId =
+        json['role_id'] as int? ?? json['moonshine_user_role_id'] as int? ?? 0;
     return UserSummary(
       id: json['id'] as int,
       name: json['name'] as String,
@@ -37,6 +38,7 @@ class UserSummary {
       roleName: roleName,
       roleId: roleId,
       balance: double.tryParse(json['balance'].toString()) ?? 0,
+      password: json['password'] as String?,
     );
   }
 }

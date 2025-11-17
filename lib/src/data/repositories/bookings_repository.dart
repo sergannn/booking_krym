@@ -8,10 +8,12 @@ class SeatBooking {
   const SeatBooking({
     required this.seatNumber,
     required this.passengerType,
+    this.withEntry = false,
   });
 
   final int seatNumber;
   final PassengerType passengerType;
+  final bool withEntry;
 
   Map<String, dynamic> toJson() {
     return {

@@ -5,29 +5,63 @@ import 'package:intl/intl.dart';
 import '../../data/models/user.dart';
 import '../../data/providers.dart';
 import '../auth/auth_controller.dart';
+import 'assignments_controller.dart';
 
-class StaffHomePage extends ConsumerWidget {
+final assignmentsControllerProvider =
+    Provider.family<AssignmentsController, User>(
+  (ref, user) {
+    final assignmentsRepo = ref.watch(assignmentsRepositoryProvider);
+    final controller = AssignmentsController(
+      user: user,
+      assignmentsRepository: assignmentsRepo,
+    );
+    ref.onDispose(() => controller.dispose());
+    return controller;
+  },
+);
+
+class StaffHomePage extends ConsumerStatefulWidget {
   const StaffHomePage({super.key, required this.user});
 
   final User user;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<StaffHomePage> createState() => _StaffHomePageState();
+}
+
+class _StaffHomePageState extends ConsumerState<StaffHomePage> {
+  @override
+  void initState() {
+    super.initState();
+    // Инициализируем контроллер при открытии страницы
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(assignmentsControllerProvider(widget.user));
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final excursionsAsync = ref.watch(excursionsFutureProvider);
     final formatter = DateFormat('dd.MM.yyyy HH:mm');
 
     // Определяем, водитель это или гид
-    final isDriver = user.roleId == 3;
-    final normalizedRole = user.role.trim().toLowerCase();
-    final isGuide = normalizedRole.contains('гид') || 
-                    normalizedRole.contains('guide') ||
-                    normalizedRole.contains('экскурсовод');
-    
-    final appBarTitle = isDriver 
-        ? 'Кабинет водителя' 
-        : isGuide 
+    final isDriver = widget.user.roleId == 3;
+    final normalizedRole = widget.user.role.trim().toLowerCase();
+    final isGuide = normalizedRole.contains('гид') ||
+        normalizedRole.contains('guide') ||
+        normalizedRole.contains('экскурсовод');
+
+    // Подписываемся на контроллер назначений (только для водителей и гидов)
+    // Уведомления показываются автоматически в контроллере при обнаружении новых назначений
+    if (isDriver || isGuide) {
+      ref.watch(assignmentsControllerProvider(widget.user));
+    }
+
+    final appBarTitle = isDriver
+        ? 'Кабинет водителя'
+        : isGuide
             ? 'Кабинет экскурсовода'
-            : 'Расписание — ${user.name}';
+            : 'Расписание — ${widget.user.name}';
 
     return Scaffold(
       appBar: AppBar(
@@ -36,7 +70,8 @@ class StaffHomePage extends ConsumerWidget {
           IconButton(
             tooltip: 'Выйти',
             icon: const Icon(Icons.logout),
-            onPressed: () => ref.read(authControllerProvider.notifier).signOut(),
+            onPressed: () =>
+                ref.read(authControllerProvider.notifier).signOut(),
           ),
         ],
       ),
@@ -47,7 +82,7 @@ class StaffHomePage extends ConsumerWidget {
           final assigned = items
               .where(
                 (excursion) => excursion.assignedStaff
-                    .any((staff) => staff.id == user.id),
+                    .any((staff) => staff.id == widget.user.id),
               )
               .toList();
           if (assigned.isEmpty) {
@@ -63,7 +98,7 @@ class StaffHomePage extends ConsumerWidget {
             itemBuilder: (context, index) {
               final excursion = assigned[index];
               final role = excursion.assignedStaff
-                  .firstWhere((staff) => staff.id == user.id)
+                  .firstWhere((staff) => staff.id == widget.user.id)
                   .roleInExcursion;
               return Card(
                 child: Padding(

@@ -15,6 +15,7 @@ class Excursion {
     required this.assignedStaff,
     required this.busSeats,
     required this.tariffs,
+    this.staffPrices = const [],
   });
 
   final int id;
@@ -23,13 +24,14 @@ class Excursion {
   final DateTime date;
   final String time;
   final DateTime dateTime;
-  final double price;
+  final double? price;
   final int maxSeats;
   final int bookedSeatsCount;
   final int availableSeatsCount;
   final List<ExcursionStaff> assignedStaff;
   final List<BusSeat> busSeats;
   final Map<String, ExcursionTariff> tariffs;
+  final List<StaffPrice> staffPrices;
 
   bool get isPast => dateTime.isBefore(DateTime.now());
 
@@ -55,7 +57,9 @@ class Excursion {
       date: date,
       time: json['time'] as String? ?? '',
       dateTime: dateTime,
-      price: double.parse(json['price'].toString()),
+      price: json['price'] != null
+          ? double.tryParse(json['price'].toString())
+          : null,
       maxSeats: json['max_seats'] as int,
       bookedSeatsCount: json['booked_seats_count'] as int? ?? 0,
       availableSeatsCount: json['available_seats_count'] as int? ?? 0,
@@ -70,9 +74,23 @@ class Excursion {
           : seatsJson
               .map((seat) => BusSeat.fromJson(seat as Map<String, dynamic>))
               .toList(),
-      tariffs:
-          _parseTariffs(pricesJson, double.parse(json['price'].toString())),
+      tariffs: _parseTariffs(
+        pricesJson,
+        json['price'] != null
+            ? double.tryParse(json['price'].toString()) ?? 0.0
+            : 0.0,
+      ),
+      staffPrices: _parseStaffPrices(json['staff_prices'] as List<dynamic>?),
     );
+  }
+
+  static List<StaffPrice> _parseStaffPrices(List<dynamic>? staffPricesJson) {
+    if (staffPricesJson == null || staffPricesJson.isEmpty) {
+      return [];
+    }
+    return staffPricesJson
+        .map((item) => StaffPrice.fromJson(item as Map<String, dynamic>))
+        .toList();
   }
 
   static Map<String, ExcursionTariff> _parseTariffs(
@@ -83,6 +101,8 @@ class Excursion {
       price: defaultPrice,
       sellerCommissionPercent: 10,
       partnerCommissionPercent: 10,
+      priceWithoutEntry: defaultPrice,
+      priceWithEntry: defaultPrice,
     );
 
     if (pricesJson == null || pricesJson.isEmpty) {
@@ -121,11 +141,19 @@ class Excursion {
             json['partner_commission_percent']?.toString() ?? '',
           ) ??
           10;
+      final priceWithoutEntry = json['price_without_entry'] != null
+          ? double.tryParse(json['price_without_entry']?.toString() ?? '')
+          : null;
+      final priceWithEntry = json['price_with_entry'] != null
+          ? double.tryParse(json['price_with_entry']?.toString() ?? '')
+          : null;
 
       map[type] = ExcursionTariff(
         price: priceValue,
         sellerCommissionPercent: seller,
         partnerCommissionPercent: partner,
+        priceWithoutEntry: priceWithoutEntry ?? priceValue,
+        priceWithEntry: priceWithEntry ?? priceValue,
       );
     }
 
@@ -133,7 +161,7 @@ class Excursion {
   }
 
   double priceFor(String passengerType) {
-    return tariffs[passengerType]?.price ?? price;
+    return tariffs[passengerType]?.price ?? price ?? 0.0;
   }
 }
 
@@ -142,11 +170,15 @@ class ExcursionTariff {
     required this.price,
     required this.sellerCommissionPercent,
     required this.partnerCommissionPercent,
+    this.priceWithoutEntry,
+    this.priceWithEntry,
   });
 
   final double price;
   final double sellerCommissionPercent;
   final double partnerCommissionPercent;
+  final double? priceWithoutEntry;
+  final double? priceWithEntry;
 }
 
 class ExcursionStaff {
@@ -169,5 +201,37 @@ class ExcursionStaff {
       email: json['email'] as String? ?? '',
       roleInExcursion: json['role_in_excursion'] as String? ?? '',
     );
+  }
+}
+
+class StaffPrice {
+  const StaffPrice({
+    required this.staffType,
+    required this.minPassengers,
+    this.maxPassengers,
+    required this.price,
+  });
+
+  final String staffType; // driver | guide
+  final int minPassengers;
+  final int? maxPassengers;
+  final double price;
+
+  factory StaffPrice.fromJson(Map<String, dynamic> json) {
+    return StaffPrice(
+      staffType: json['staff_type'] as String,
+      minPassengers: json['min_passengers'] as int,
+      maxPassengers: json['max_passengers'] as int?,
+      price: double.tryParse(json['price'].toString()) ?? 0.0,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'staff_type': staffType,
+      'min_passengers': minPassengers,
+      'max_passengers': maxPassengers,
+      'price': price,
+    };
   }
 }

@@ -47,6 +47,7 @@ class _BookingDialogState extends State<BookingDialog> {
         _seatsWithTypes.add(SeatBooking(
           seatNumber: seatNum,
           passengerType: PassengerType.adult,
+          withEntry: false,
         ));
       }
     }
@@ -117,6 +118,7 @@ class _BookingDialogState extends State<BookingDialog> {
                           _seatsWithTypes.add(SeatBooking(
                             seatNumber: seatNum,
                             passengerType: PassengerType.adult,
+                            withEntry: false,
                           ));
                         }
                       }
@@ -132,46 +134,101 @@ class _BookingDialogState extends State<BookingDialog> {
                 ),
                 const SizedBox(height: 8),
                 ..._seatsWithTypes.map((seatBooking) => Padding(
-                      padding: const EdgeInsets.only(bottom: 8),
-                      child: Row(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Expanded(
-                            child: Text('Место №${seatBooking.seatNumber}'),
-                          ),
-                          Expanded(
-                            child: DropdownButtonFormField<PassengerType>(
-                              value: seatBooking.passengerType,
-                              items: PassengerType.values
-                                  .map(
-                                    (type) => DropdownMenuItem(
-                                      value: type,
-                                      child: Text(type.label),
-                                    ),
-                                  )
-                                  .toList(),
-                              onChanged: (value) {
-                                if (value != null) {
-                                  setState(() {
-                                    final index = _seatsWithTypes.indexWhere(
-                                      (s) =>
-                                          s.seatNumber ==
-                                          seatBooking.seatNumber,
-                                    );
-                                    if (index != -1) {
-                                      _seatsWithTypes[index] = SeatBooking(
-                                        seatNumber: seatBooking.seatNumber,
-                                        passengerType: value,
-                                      );
-                                    }
-                                  });
-                                }
-                              },
-                              decoration: const InputDecoration(
-                                isDense: true,
-                                contentPadding: EdgeInsets.symmetric(
-                                    horizontal: 8, vertical: 8),
-                              ),
+                          Text(
+                            'Место №${seatBooking.seatNumber}',
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w600,
+                              fontSize: 14,
                             ),
+                          ),
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: DropdownButtonFormField<PassengerType>(
+                                  value: seatBooking.passengerType,
+                                  items: PassengerType.values
+                                      .map(
+                                        (type) => DropdownMenuItem(
+                                          value: type,
+                                          child: Text(type.label),
+                                        ),
+                                      )
+                                      .toList(),
+                                  onChanged: (value) {
+                                    if (value != null) {
+                                      setState(() {
+                                        final index =
+                                            _seatsWithTypes.indexWhere(
+                                          (s) =>
+                                              s.seatNumber ==
+                                              seatBooking.seatNumber,
+                                        );
+                                        if (index != -1) {
+                                          _seatsWithTypes[index] = SeatBooking(
+                                            seatNumber: seatBooking.seatNumber,
+                                            passengerType: value,
+                                            withEntry: seatBooking.withEntry,
+                                          );
+                                        }
+                                      });
+                                    }
+                                  },
+                                  decoration: const InputDecoration(
+                                    labelText: 'Тип пассажира',
+                                    isDense: true,
+                                    contentPadding: EdgeInsets.symmetric(
+                                        horizontal: 8, vertical: 8),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: DropdownButtonFormField<bool>(
+                                  value: seatBooking.withEntry,
+                                  items: const [
+                                    DropdownMenuItem(
+                                      value: false,
+                                      child: Text('Без входа'),
+                                    ),
+                                    DropdownMenuItem(
+                                      value: true,
+                                      child: Text('Со входом'),
+                                    ),
+                                  ],
+                                  onChanged: (value) {
+                                    if (value != null) {
+                                      setState(() {
+                                        final index =
+                                            _seatsWithTypes.indexWhere(
+                                          (s) =>
+                                              s.seatNumber ==
+                                              seatBooking.seatNumber,
+                                        );
+                                        if (index != -1) {
+                                          _seatsWithTypes[index] = SeatBooking(
+                                            seatNumber: seatBooking.seatNumber,
+                                            passengerType:
+                                                seatBooking.passengerType,
+                                            withEntry: value,
+                                          );
+                                        }
+                                      });
+                                    }
+                                  },
+                                  decoration: const InputDecoration(
+                                    labelText: 'Вход',
+                                    isDense: true,
+                                    contentPadding: EdgeInsets.symmetric(
+                                        horizontal: 8, vertical: 8),
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                         ],
                       ),
@@ -184,7 +241,10 @@ class _BookingDialogState extends State<BookingDialog> {
                       final tariff =
                           widget.tariffs[seat.passengerType.apiValue];
                       if (tariff != null) {
-                        total += tariff.price;
+                        final price = seat.withEntry
+                            ? (tariff.priceWithEntry ?? tariff.price)
+                            : (tariff.priceWithoutEntry ?? tariff.price);
+                        total += price;
                       }
                     }
                     return Text(
@@ -244,11 +304,28 @@ class _BookingDialogState extends State<BookingDialog> {
                 Builder(
                   builder: (context) {
                     final tariff = widget.tariffs[_passengerType.apiValue];
-                    final pricePerSeat = tariff?.price;
-                    if (pricePerSeat != null) {
-                      return Text(
-                        'Цена за место: ${pricePerSeat.toStringAsFixed(2)} ₽',
-                      );
+                    if (tariff != null) {
+                      // Показываем обе цены для старого формата
+                      final priceWithout =
+                          tariff.priceWithoutEntry ?? tariff.price;
+                      final priceWith = tariff.priceWithEntry ?? tariff.price;
+                      if (priceWithout != priceWith) {
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Без входа: ${priceWithout.toStringAsFixed(2)} ₽',
+                            ),
+                            Text(
+                              'Со входом: ${priceWith.toStringAsFixed(2)} ₽',
+                            ),
+                          ],
+                        );
+                      } else {
+                        return Text(
+                          'Цена за место: ${tariff.price.toStringAsFixed(2)} ₽',
+                        );
+                      }
                     }
                     return const Text(
                       'Цена для выбранного типа не настроена',

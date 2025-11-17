@@ -99,11 +99,12 @@ class _AdminBookingTabState extends ConsumerState<_AdminBookingTab> {
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
-      length: 2,
+      length: 3,
       child: Column(
         children: [
           const TabBar(
             tabs: [
+              Tab(text: 'Новое бронирование'),
               Tab(text: 'Мои бронирования'),
               Tab(text: 'Бронирования'),
             ],
@@ -111,10 +112,146 @@ class _AdminBookingTabState extends ConsumerState<_AdminBookingTab> {
           Expanded(
             child: TabBarView(
               children: [
+                _NewBookingSubTab(user: widget.user),
                 _MyBookingsSubTab(user: widget.user),
                 _AllBookingsSubTab(),
               ],
             ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _NewBookingSubTab extends ConsumerStatefulWidget {
+  const _NewBookingSubTab({required this.user});
+
+  final User user;
+
+  @override
+  ConsumerState<_NewBookingSubTab> createState() => _NewBookingSubTabState();
+}
+
+class _NewBookingSubTabState extends ConsumerState<_NewBookingSubTab> {
+  DateTime? _selectedDate;
+
+  Future<void> _selectDate(BuildContext context) async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _selectedDate ?? DateTime.now(),
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2100),
+    );
+    if (picked != null) {
+      setState(() {
+        _selectedDate = picked;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final excursionsAsync = ref.watch(excursionsFutureProvider);
+    final formatter = DateFormat('dd.MM.yyyy HH:mm');
+
+    return RefreshIndicator(
+      onRefresh: () async {
+        ref.invalidate(excursionsFutureProvider);
+        await ref.read(excursionsFutureProvider.future);
+      },
+      child: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Новое бронирование',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              OutlinedButton.icon(
+                icon: const Icon(Icons.calendar_today, size: 18),
+                label: Text(
+                  _selectedDate == null
+                      ? 'Выбрать дату'
+                      : DateFormat('dd.MM.yyyy').format(_selectedDate!),
+                ),
+                onPressed: () => _selectDate(context),
+              ),
+            ],
+          ),
+          if (_selectedDate != null) ...[
+            const SizedBox(height: 8),
+            TextButton.icon(
+              icon: const Icon(Icons.clear, size: 18),
+              label: const Text('Сбросить фильтр'),
+              onPressed: () {
+                setState(() {
+                  _selectedDate = null;
+                });
+              },
+            ),
+          ],
+          const SizedBox(height: 8),
+          excursionsAsync.when(
+            loading: () => const Padding(
+              padding: EdgeInsets.symmetric(vertical: 24),
+              child: Center(child: CircularProgressIndicator()),
+            ),
+            error: (error, _) => Padding(
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              child: Text('Не удалось загрузить экскурсии: $error'),
+            ),
+            data: (excursions) {
+              // Фильтруем по выбранной дате
+              final filteredExcursions = _selectedDate == null
+                  ? excursions
+                  : excursions.where((excursion) {
+                      final excursionDate = DateTime(
+                        excursion.dateTime.year,
+                        excursion.dateTime.month,
+                        excursion.dateTime.day,
+                      );
+                      final selectedDateOnly = DateTime(
+                        _selectedDate!.year,
+                        _selectedDate!.month,
+                        _selectedDate!.day,
+                      );
+                      return excursionDate == selectedDateOnly;
+                    }).toList();
+
+              // Показываем только будущие экскурсии
+              final futureExcursions = filteredExcursions
+                  .where((excursion) => !excursion.isPast)
+                  .toList()
+                ..sort((a, b) => a.dateTime.compareTo(b.dateTime));
+
+              if (futureExcursions.isEmpty) {
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 24),
+                  child: Text(
+                    _selectedDate == null
+                        ? 'Нет доступных экскурсий для бронирования'
+                        : 'Нет доступных экскурсий на выбранную дату',
+                    textAlign: TextAlign.center,
+                  ),
+                );
+              }
+
+              return ListView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: futureExcursions.length,
+                itemBuilder: (context, index) {
+                  final excursion = futureExcursions[index];
+                  return _AdminExcursionCard(
+                    excursion: excursion,
+                    formatter: formatter,
+                  );
+                },
+              );
+            },
           ),
         ],
       ),
@@ -1568,58 +1705,84 @@ class _AdminStatisticsTab extends ConsumerWidget {
                 final excursion = stat['excursion'] as Map<String, dynamic>;
                 final dateTime =
                     DateTime.parse(excursion['date_time'] as String);
+                final netProfit = (stat['net_profit'] as double);
                 return Card(
                   margin: const EdgeInsets.only(bottom: 12),
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          excursion['title'] as String,
-                          style: Theme.of(context).textTheme.titleMedium,
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          formatter.format(dateTime),
-                          style: Theme.of(context).textTheme.bodySmall,
-                        ),
-                        const Divider(),
-                        _StatRow(
-                          label: 'Выручка',
-                          value:
-                              '${(stat['total_revenue'] as double).toStringAsFixed(2)} ₽',
-                          color: Colors.blue,
-                        ),
-                        _StatRow(
-                          label: 'Комиссии продавцов',
-                          value:
-                              '-${(stat['seller_commissions'] as double).toStringAsFixed(2)} ₽',
-                          color: Colors.orange,
-                        ),
-                        _StatRow(
-                          label: 'Расходы на персонал',
-                          value:
-                              '-${(stat['staff_costs'] as double).toStringAsFixed(2)} ₽',
-                          color: Colors.purple,
-                        ),
-                        const Divider(),
-                        _StatRow(
-                          label: 'Чистая прибыль',
-                          value:
-                              '${(stat['net_profit'] as double).toStringAsFixed(2)} ₽',
-                          color: (stat['net_profit'] as double) >= 0
-                              ? Colors.green
-                              : Colors.red,
-                          isBold: true,
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          'Бронирований: ${stat['bookings_count'] as int}',
-                          style: Theme.of(context).textTheme.bodySmall,
-                        ),
-                      ],
+                  child: ExpansionTile(
+                    leading: Icon(
+                      netProfit >= 0 ? Icons.trending_up : Icons.trending_down,
+                      color: netProfit >= 0 ? Colors.green : Colors.red,
                     ),
+                    title: Text(
+                      excursion['title'] as String,
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    subtitle: Text(
+                      '${formatter.format(dateTime)} • Чистая прибыль: ${netProfit.toStringAsFixed(2)} ₽',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Divider(),
+                            _StatRow(
+                              label: 'Доход (выручка от продажи билетов)',
+                              value:
+                                  '${((stat['income'] as double?) ?? (stat['total_revenue'] as double)).toStringAsFixed(2)} ₽',
+                              color: Colors.blue,
+                            ),
+                            _StatRow(
+                              label: 'Продано билетов',
+                              value: '${stat['bookings_count'] as int} шт.',
+                              color: Colors.grey,
+                            ),
+                            const Divider(),
+                            _StatRow(
+                              label: 'Минус: Заплатили продавцам',
+                              value:
+                                  '-${(stat['seller_commissions'] as double).toStringAsFixed(2)} ₽',
+                              color: Colors.orange,
+                            ),
+                            _StatRow(
+                              label: 'Минус: Заплатили водителям',
+                              value:
+                                  '-${(stat['driver_costs'] as double? ?? 0.0).toStringAsFixed(2)} ₽',
+                              color: Colors.purple,
+                            ),
+                            _StatRow(
+                              label: 'Минус: Заплатили экскурсоводам',
+                              value:
+                                  '-${(stat['guide_costs'] as double? ?? 0.0).toStringAsFixed(2)} ₽',
+                              color: Colors.purple,
+                            ),
+                            _StatRow(
+                              label: 'Всего расходы на персонал',
+                              value:
+                                  '-${(stat['staff_costs'] as double).toStringAsFixed(2)} ₽',
+                              color: Colors.purple,
+                            ),
+                            const Divider(),
+                            _StatRow(
+                              label: 'Чистая прибыль',
+                              value:
+                                  '${(stat['net_profit'] as double).toStringAsFixed(2)} ₽',
+                              color: (stat['net_profit'] as double) >= 0
+                                  ? Colors.green
+                                  : Colors.red,
+                              isBold: true,
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'Доход - комиссии продавцам - расходы на персонал',
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
                 );
               }).toList(),

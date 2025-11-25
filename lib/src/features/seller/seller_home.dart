@@ -11,6 +11,7 @@ import '../../data/providers.dart';
 import '../auth/auth_controller.dart';
 import '../common/utils/pdf_downloader.dart';
 import '../common/widgets/cancellation_reason_dialog.dart';
+import '../admin/widgets/prices_tab.dart';
 
 class SellerHomePage extends ConsumerStatefulWidget {
   const SellerHomePage({super.key, required this.user});
@@ -30,6 +31,8 @@ class _SellerHomePageState extends ConsumerState<SellerHomePage> {
       const _ExcursionsTab(),
       const _BookingsTab(),
       _SellerWalletTab(user: widget.user),
+      const _PricesTab(),
+      const _ScheduleTab(),
     ];
 
     return Scaffold(
@@ -64,6 +67,10 @@ class _SellerHomePageState extends ConsumerState<SellerHomePage> {
               icon: Icon(Icons.event_seat), label: 'Бронирования'),
           NavigationDestination(
               icon: Icon(Icons.account_balance_wallet), label: 'Кошелёк'),
+          NavigationDestination(
+              icon: Icon(Icons.currency_ruble), label: 'Цены'),
+          NavigationDestination(
+              icon: Icon(Icons.calendar_today), label: 'Расписание'),
         ],
       ),
     );
@@ -79,7 +86,8 @@ class _ExcursionsTab extends ConsumerWidget {
     final user = authState.value;
     if (user == null) return const SizedBox.shrink();
     final excursionsAsync = ref.watch(excursionsFutureProvider);
-    final formatter = DateFormat('HH:mm');
+    final timeFormatter = DateFormat('HH:mm');
+    final dateFormatter = DateFormat('EEEE, dd MMMM yyyy', 'ru_RU');
 
     return excursionsAsync.when(
       loading: () => const Center(child: CircularProgressIndicator()),
@@ -109,9 +117,9 @@ class _ExcursionsTab extends ConsumerWidget {
               final date = sortedDates[index];
               final dayItems = groups[date]!;
               return _ExcursionDaySection(
-                date: DateFormat('EEEE, dd MMMM yyyy', 'ru_RU').format(date),
+                date: dateFormatter.format(date),
                 excursions: dayItems,
-                formatter: formatter,
+                formatter: timeFormatter,
                 user: user,
               );
             },
@@ -137,25 +145,30 @@ class _ExcursionDaySection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      child: ExpansionTile(
+        title: Text(
           date,
           style: Theme.of(context)
               .textTheme
               .titleMedium
               ?.copyWith(fontWeight: FontWeight.bold),
         ),
-        const SizedBox(height: 12),
-        for (final excursion in excursions)
-          _ExcursionTile(
-            excursion: excursion,
-            formatter: formatter,
-            user: user,
-          ),
-        const SizedBox(height: 24),
-      ],
+        subtitle: Text(
+            '${excursions.length} ${excursions.length == 1 ? 'экскурсия' : excursions.length < 5 ? 'экскурсии' : 'экскурсий'}'),
+        children: [
+          for (final excursion in excursions)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              child: _ExcursionTile(
+                excursion: excursion,
+                formatter: formatter,
+                user: user,
+              ),
+            ),
+        ],
+      ),
     );
   }
 }
@@ -177,54 +190,59 @@ class _ExcursionTile extends ConsumerWidget {
     final isAvailable = excursion.availableSeatsCount > 0 && !excursion.isPast;
 
     return Card(
-      margin: const EdgeInsets.only(bottom: 12),
+      margin: const EdgeInsets.only(bottom: 8),
       color: isAvailable
           ? null
           : Colors.grey.shade200, // Серый фон для недоступных
       child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
+        padding: const EdgeInsets.all(12),
+        child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              '${formatter.format(excursion.dateTime)} — ${excursion.title}',
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-            if (excursion.description.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.only(top: 4),
-                child: Text(
-                  excursion.description,
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
-              ),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                Text(
-                  'Цена (взрослый): ${excursion.priceFor('adult').toStringAsFixed(2)} ₽',
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Text(
-                    'Свободно ${excursion.availableSeatsCount} из ${excursion.maxSeats}',
-                    textAlign: TextAlign.end,
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '${excursion.title} — ${formatter.format(excursion.dateTime)}',
+                    style: Theme.of(context).textTheme.titleMedium,
                   ),
-                ),
-              ],
+                  if (excursion.description.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: Text(
+                        excursion.description,
+                        style: Theme.of(context).textTheme.bodySmall,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Цена (взрослый): ${excursion.priceFor('adult').toStringAsFixed(2)} ₽',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                  Text(
+                    'Свободно ${excursion.availableSeatsCount} из ${excursion.maxSeats}',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ],
+              ),
             ),
-            const SizedBox(height: 12),
-            Row(
+            const SizedBox(width: 8),
+            Column(
               children: [
-                FilledButton.icon(
+                IconButton(
                   icon: const Icon(Icons.event_seat),
-                  label: const Text('Забронировать'),
+                  tooltip: 'Забронировать',
                   onPressed: isAvailable ? () => _book(context, ref) : null,
+                  color: isAvailable
+                      ? Theme.of(context).colorScheme.primary
+                      : Colors.grey,
                 ),
-                const SizedBox(width: 12),
-                OutlinedButton.icon(
+                IconButton(
                   icon: const Icon(Icons.list),
-                  label: const Text('Места'),
+                  tooltip: 'Места',
                   onPressed: excursion.busSeats.isEmpty
                       ? null
                       : () => _showSeatSheet(context, ref),
@@ -402,11 +420,31 @@ class _ExcursionTile extends ConsumerWidget {
   }
 }
 
-class _BookingsTab extends ConsumerWidget {
+class _BookingsTab extends ConsumerStatefulWidget {
   const _BookingsTab();
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_BookingsTab> createState() => _BookingsTabState();
+}
+
+class _BookingsTabState extends ConsumerState<_BookingsTab>
+    with SingleTickerProviderStateMixin {
+  late TabController _tabController;
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 2, vsync: this);
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final bookingsAsync = ref.watch(bookingsFutureProvider);
     final formatter = DateFormat('dd.MM.yyyy HH:mm');
 
@@ -417,29 +455,156 @@ class _BookingsTab extends ConsumerWidget {
         if (groups.isEmpty) {
           return const Center(child: Text('Вы ещё не бронировали места'));
         }
-        return RefreshIndicator(
-          onRefresh: () async {
-            ref.invalidate(bookingsFutureProvider);
-            await ref.read(bookingsFutureProvider.future);
-          },
-          child: ListView.builder(
-            padding: const EdgeInsets.all(16),
-            itemCount: groups.length,
-            itemBuilder: (context, index) {
-              final group = groups[index];
-              return Card(
-                margin: const EdgeInsets.only(bottom: 12),
-                child: ExpansionTile(
+
+        // Разделяем на новые (будущие) и старые (прошедшие)
+        final now = DateTime.now();
+        final newGroups = <BookingGroup>[];
+        final oldGroups = <BookingGroup>[];
+
+        for (final group in groups) {
+          if (group.excursion.dateTime.isAfter(now)) {
+            newGroups.add(group);
+          } else {
+            oldGroups.add(group);
+          }
+        }
+
+        // Сортируем внутри групп по датам
+        newGroups.sort(
+            (a, b) => a.excursion.dateTime.compareTo(b.excursion.dateTime));
+        oldGroups.sort(
+            (a, b) => b.excursion.dateTime.compareTo(a.excursion.dateTime));
+
+        // Группируем по датам экскурсий
+        final groupByDate = (List<BookingGroup> groups) {
+          final dateGroups = <DateTime, List<BookingGroup>>{};
+          for (final group in groups) {
+            final date = DateTime(
+              group.excursion.dateTime.year,
+              group.excursion.dateTime.month,
+              group.excursion.dateTime.day,
+            );
+            dateGroups.putIfAbsent(date, () => []).add(group);
+          }
+          return dateGroups;
+        };
+
+        final newDateGroups = groupByDate(newGroups);
+        final oldDateGroups = groupByDate(oldGroups);
+        final sortedNewDates = newDateGroups.keys.toList()..sort();
+        final sortedOldDates = oldDateGroups.keys.toList()
+          ..sort((a, b) => b.compareTo(a));
+
+        final dateFormatter = DateFormat('EEEE, dd MMMM yyyy', 'ru_RU');
+        final timeFormatter = DateFormat('HH:mm');
+
+        return Column(
+          children: [
+            TabBar(
+              controller: _tabController,
+              tabs: const [
+                Tab(text: 'Новые'),
+                Tab(text: 'Прошедшие'),
+              ],
+            ),
+            Expanded(
+              child: TabBarView(
+                controller: _tabController,
+                children: [
+                  _buildBookingsList(
+                    context,
+                    ref,
+                    sortedNewDates,
+                    newDateGroups,
+                    dateFormatter,
+                    timeFormatter,
+                    formatter,
+                    'Нет новых бронирований',
+                  ),
+                  _buildBookingsList(
+                    context,
+                    ref,
+                    sortedOldDates,
+                    oldDateGroups,
+                    dateFormatter,
+                    timeFormatter,
+                    formatter,
+                    'Нет прошедших бронирований',
+                  ),
+                ],
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildBookingsList(
+    BuildContext context,
+    WidgetRef ref,
+    List<DateTime> sortedDates,
+    Map<DateTime, List<BookingGroup>> dateGroups,
+    DateFormat dateFormatter,
+    DateFormat timeFormatter,
+    DateFormat subFormatter,
+    String emptyMessage,
+  ) {
+    if (dateGroups.isEmpty || sortedDates.isEmpty) {
+      return RefreshIndicator(
+        onRefresh: () async {
+          ref.invalidate(bookingsFutureProvider);
+          await ref.read(bookingsFutureProvider.future);
+        },
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          child: SizedBox(
+            height: MediaQuery.of(context).size.height * 0.5,
+            child: Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Text(emptyMessage),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    return RefreshIndicator(
+      onRefresh: () async {
+        ref.invalidate(bookingsFutureProvider);
+        await ref.read(bookingsFutureProvider.future);
+      },
+      child: ListView(
+        padding: const EdgeInsets.all(16),
+        children: sortedDates.map((date) {
+          final groups = dateGroups[date]!;
+          final totalBookings =
+              groups.fold<int>(0, (sum, g) => sum + g.bookings.length);
+          return Card(
+            margin: const EdgeInsets.only(bottom: 12),
+            child: ExpansionTile(
+              title: Text(
+                dateFormatter.format(date),
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+              ),
+              subtitle: Text(
+                  '$totalBookings ${totalBookings == 1 ? 'бронирование' : totalBookings < 5 ? 'бронирования' : 'бронирований'}'),
+              children: groups.map((group) {
+                return ExpansionTile(
                   title: Text(group.excursion.title),
                   subtitle: Text(
-                    '${formatter.format(group.excursion.dateTime)} • ${group.bookings.length} мест',
+                    '${timeFormatter.format(group.excursion.dateTime)} • ${group.bookings.length} место${group.bookings.length > 1 ? 'а' : ''}${group.excursion.maxSeats != null ? ' из ${group.excursion.maxSeats}' : ''}',
                   ),
                   children: group.bookings
                       .map(
                         (booking) => ListTile(
                           title: Text('Место ${booking.seat.seatNumber}'),
                           subtitle: Text(
-                              'Бронировано: ${formatter.format(booking.bookedAt)}'),
+                              'Бронировано: ${subFormatter.format(booking.bookedAt)}'),
                           trailing: IconButton(
                             icon: const Icon(Icons.cancel),
                             tooltip: 'Отменить',
@@ -448,12 +613,12 @@ class _BookingsTab extends ConsumerWidget {
                         ),
                       )
                       .toList(),
-                ),
-              );
-            },
-          ),
-        );
-      },
+                );
+              }).toList(),
+            ),
+          );
+        }).toList(),
+      ),
     );
   }
 
@@ -885,5 +1050,153 @@ class _SellerWalletTabState extends ConsumerState<_SellerWalletTab> {
         SnackBar(content: Text('Не удалось отменить: $error')),
       );
     }
+  }
+}
+
+class _PricesTab extends ConsumerWidget {
+  const _PricesTab();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return const PricesTab();
+  }
+}
+
+class _ScheduleTab extends ConsumerWidget {
+  const _ScheduleTab();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final scheduleAsync = ref.watch(scheduleFutureProvider);
+
+    return scheduleAsync.when(
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (error, _) => Center(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.error_outline, size: 48, color: Colors.red),
+              const SizedBox(height: 16),
+              Text('Ошибка загрузки расписания: $error'),
+              const SizedBox(height: 16),
+              ElevatedButton(
+                onPressed: () => ref.invalidate(scheduleFutureProvider),
+                child: const Text('Повторить'),
+              ),
+            ],
+          ),
+        ),
+      ),
+      data: (templates) {
+        if (templates.isEmpty) {
+          return const Center(
+            child: Text('Расписание пока не настроено'),
+          );
+        }
+
+        return RefreshIndicator(
+          onRefresh: () async {
+            ref.invalidate(scheduleFutureProvider);
+          },
+          child: ListView.builder(
+            padding: const EdgeInsets.all(16),
+            itemCount: templates.length,
+            itemBuilder: (context, index) {
+              final template = templates[index];
+              return Card(
+                margin: const EdgeInsets.only(bottom: 12),
+                child: ExpansionTile(
+                  leading: const Icon(Icons.calendar_today),
+                  title: Text(
+                    template.title,
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  subtitle: template.description.isNotEmpty
+                      ? Text(
+                          template.description,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        )
+                      : null,
+                  children: [
+                    if (template.description.isNotEmpty) ...[
+                      Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 8,
+                        ),
+                        child: Text(
+                          template.description,
+                          style: Theme.of(context).textTheme.bodyMedium,
+                        ),
+                      ),
+                      const Divider(),
+                    ],
+                    Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Расписание по дням недели:',
+                            style: Theme.of(context).textTheme.titleSmall,
+                          ),
+                          const SizedBox(height: 8),
+                          if (template.schedule.isEmpty)
+                            const Text(
+                              'Расписание не задано',
+                              style: TextStyle(
+                                fontStyle: FontStyle.italic,
+                                color: Colors.grey,
+                              ),
+                            )
+                          else
+                            ...template.schedule.map((day) {
+                              return Padding(
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 4),
+                                child: Row(
+                                  children: [
+                                    SizedBox(
+                                      width: 120,
+                                      child: Text(
+                                        day.dayName,
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .bodyMedium
+                                            ?.copyWith(
+                                              fontWeight: FontWeight.w500,
+                                            ),
+                                      ),
+                                    ),
+                                    Text(
+                                      day.time,
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .bodyMedium
+                                          ?.copyWith(
+                                            color: Theme.of(context)
+                                                .colorScheme
+                                                .primary,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            }),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+        );
+      },
+    );
   }
 }

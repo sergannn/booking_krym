@@ -15,8 +15,8 @@ class BusSeat {
 
   factory BusSeat.fromJson(Map<String, dynamic> json) {
     return BusSeat(
-      id: json['id'] as int,
-      seatNumber: json['seat_number'] as int,
+      id: (json['id'] as num?)?.toInt() ?? 0,
+      seatNumber: (json['seat_number'] as num?)?.toInt() ?? 0,
       status: json['status'] as String,
       bookedBy: json['booked_by'] as int?,
       bookedAt: json['booked_at'] == null

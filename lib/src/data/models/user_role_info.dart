@@ -6,7 +6,7 @@ class UserRoleInfo {
 
   factory UserRoleInfo.fromJson(Map<String, dynamic> json) {
     return UserRoleInfo(
-      id: json['id'] as int,
+      id: (json['id'] as num?)?.toInt() ?? 0,
       name: json['name'] as String? ?? 'Unknown',
     );
   }

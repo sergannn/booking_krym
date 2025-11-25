@@ -14,4 +14,13 @@ class StopsRepository {
         .map((item) => Stop.fromJson(item as Map<String, dynamic>))
         .toList();
   }
+
+  Future<List<Stop>> fetchStopsForExcursion(int excursionId) async {
+    final response =
+        await _client.getJson('/api/excursions/$excursionId/stops');
+    final stopsList = response['stops'] as List<dynamic>? ?? [];
+    return stopsList
+        .map((item) => Stop.fromJson(item as Map<String, dynamic>))
+        .toList();
+  }
 }

@@ -31,4 +31,12 @@ class WalletRepository {
     );
     return ProfitInfo.fromJson(response);
   }
+
+  Future<Map<String, dynamic>> fetchStaffProfit(int userId) async {
+    final response = await _client.getJson(
+      '/api/users/$userId/staff-profit',
+      authenticated: true,
+    );
+    return response;
+  }
 }

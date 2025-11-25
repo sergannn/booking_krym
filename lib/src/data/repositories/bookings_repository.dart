@@ -9,16 +9,23 @@ class SeatBooking {
     required this.seatNumber,
     required this.passengerType,
     this.withEntry = false,
+    this.customerName,
+    this.customerPhone,
   });
 
   final int seatNumber;
   final PassengerType passengerType;
   final bool withEntry;
+  final String? customerName; // Имя пассажира для этого места
+  final String? customerPhone; // Телефон пассажира для этого места
 
   Map<String, dynamic> toJson() {
     return {
       'seat_number': seatNumber,
       'passenger_type': passengerType.apiValue,
+      'with_entry': withEntry,
+      if (customerName != null) 'customer_name': customerName,
+      if (customerPhone != null) 'customer_phone': customerPhone,
     };
   }
 }

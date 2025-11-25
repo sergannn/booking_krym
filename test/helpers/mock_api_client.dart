@@ -122,7 +122,11 @@ class MockApiClient implements ApiClient {
   }) async {
     if (mockGetJson != null) {
       final json = await mockGetJson!(path, query: query);
-      return http.Response(jsonEncode(json), 200);
+      return http.Response.bytes(
+        utf8.encode(jsonEncode(json)),
+        200,
+        headers: {'content-type': 'application/json; charset=utf-8'},
+      );
     }
     throw UnimplementedError('get not provided for path: $path');
   }
@@ -135,7 +139,11 @@ class MockApiClient implements ApiClient {
   }) async {
     if (mockPostJson != null) {
       final json = await mockPostJson!(path, body: body);
-      return http.Response(jsonEncode(json), 200);
+      return http.Response.bytes(
+        utf8.encode(jsonEncode(json)),
+        200,
+        headers: {'content-type': 'application/json; charset=utf-8'},
+      );
     }
     throw UnimplementedError('post not provided for path: $path');
   }
@@ -148,7 +156,11 @@ class MockApiClient implements ApiClient {
   }) async {
     if (mockPutJson != null) {
       final json = await mockPutJson!(path, body: body);
-      return http.Response(jsonEncode(json), 200);
+      return http.Response.bytes(
+        utf8.encode(jsonEncode(json)),
+        200,
+        headers: {'content-type': 'application/json; charset=utf-8'},
+      );
     }
     throw UnimplementedError('put not provided for path: $path');
   }

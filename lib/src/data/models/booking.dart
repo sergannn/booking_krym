@@ -28,6 +28,7 @@ class BookingExcursion {
     required this.time,
     required this.dateTime,
     required this.price,
+    this.maxSeats,
   });
 
   final int id;
@@ -36,6 +37,7 @@ class BookingExcursion {
   final String time;
   final DateTime dateTime;
   final double price;
+  final int? maxSeats;
 
   factory BookingExcursion.fromJson(Map<String, dynamic> json) {
     final dateTime = DateTime.parse(json['date_time'] as String);
@@ -50,12 +52,13 @@ class BookingExcursion {
         dateTime.millisecond,
         dateTime.microsecond);
     return BookingExcursion(
-      id: json['id'] as int,
+      id: (json['id'] as num?)?.toInt() ?? 0,
       title: json['title'] as String,
       date: date,
       time: json['time'] as String? ?? '',
       dateTime: dateTime,
       price: double.tryParse(json['price']?.toString() ?? '') ?? 0,
+      maxSeats: json['max_seats'] as int?,
     );
   }
 }
@@ -108,7 +111,7 @@ class BookingItem {
     }
 
     return BookingItem(
-      id: json['id'] as int,
+      id: (json['id'] as num?)?.toInt() ?? 0,
       excursion:
           BookingExcursion.fromJson(json['excursion'] as Map<String, dynamic>),
       seat: parseSeat(),
@@ -137,7 +140,7 @@ class BookingSeat {
 
   factory BookingSeat.fromJson(Map<String, dynamic> json) {
     return BookingSeat(
-      id: json['id'] as int,
+      id: (json['id'] as num?)?.toInt() ?? 0,
       seatNumber: json['seat_number'] is int
           ? json['seat_number'] as int
           : int.tryParse(json['seat_number'].toString()) ?? 0,

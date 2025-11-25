@@ -22,18 +22,18 @@ class BookingDialog extends StatefulWidget {
   State<BookingDialog> createState() => _BookingDialogState();
 }
 
-class _BookingDialogState extends State<BookingDialog> {
+class _BookingDialogState extends State<BookingDialog>
+    with SingleTickerProviderStateMixin {
   final _formKey = GlobalKey<FormState>();
   final _seatsController = TextEditingController();
-  final _nameController = TextEditingController();
-  final _phoneController = TextEditingController();
-  PassengerType _passengerType = PassengerType.adult;
+  late TabController _tabController;
+
   int? _stopId;
   Stop? _selectedStop;
   late final List<int> _seatNumbers;
 
-  // Новый формат: список мест с типами пассажиров
-  final List<SeatBooking> _seatsWithTypes = [];
+  // Данные для каждого места: номер места -> данные пассажира
+  final Map<int, _SeatPassengerData> _seatData = {};
 
   @override
   void initState() {
@@ -41,301 +41,127 @@ class _BookingDialogState extends State<BookingDialog> {
     _seatNumbers = List<int>.from(widget.initialSeatNumbers);
     if (_seatNumbers.isNotEmpty) {
       _seatsController.text = _seatNumbers.join(', ');
-      // Всегда создаем список для множественного выбора, если есть предустановленные места
-      // Это позволяет выбрать тип пассажира для каждого места
+      // Инициализируем данные для каждого места
       for (final seatNum in _seatNumbers) {
-        _seatsWithTypes.add(SeatBooking(
-          seatNumber: seatNum,
-          passengerType: PassengerType.adult,
-          withEntry: false,
-        ));
+        _seatData[seatNum] = _SeatPassengerData();
       }
     }
     if (widget.stops.isNotEmpty) {
       _selectedStop = widget.stops.first;
       _stopId = _selectedStop!.id;
     }
+    _tabController = TabController(
+      length: _seatNumbers.isEmpty ? 1 : _seatNumbers.length,
+      vsync: this,
+    );
   }
 
   @override
   void dispose() {
     _seatsController.dispose();
-    _nameController.dispose();
-    _phoneController.dispose();
+    _tabController.dispose();
+    for (final data in _seatData.values) {
+      data.nameController.dispose();
+      data.phoneController.dispose();
+    }
     super.dispose();
+  }
+
+  void _updateSeats() {
+    final seats = _parseSeatNumbers(_seatsController.text.trim());
+    setState(() {
+      // Удаляем данные для мест, которых больше нет
+      _seatData.removeWhere((seatNum, _) => !seats.contains(seatNum));
+      // Добавляем данные для новых мест
+      for (final seatNum in seats) {
+        _seatData.putIfAbsent(seatNum, () => _SeatPassengerData());
+      }
+      _seatNumbers.clear();
+      _seatNumbers.addAll(seats);
+      // Обновляем TabController
+      final oldLength = _tabController.length;
+      final newLength = seats.isEmpty ? 1 : seats.length;
+      if (oldLength != newLength) {
+        _tabController.dispose();
+        _tabController = TabController(length: newLength, vsync: this);
+      }
+    });
   }
 
   @override
   Widget build(BuildContext context) {
+    final hasSeats = _seatNumbers.isNotEmpty;
+
     return AlertDialog(
       title: const Text('Новое бронирование'),
-      content: SingleChildScrollView(
+      content: SizedBox(
+        width: double.maxFinite,
         child: Form(
           key: _formKey,
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
             mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              TextFormField(
-                controller: _seatsController,
-                enabled: !widget.lockSeatSelection,
-                decoration: InputDecoration(
-                  labelText: 'Места',
-                  hintText: widget.lockSeatSelection
-                      ? 'Места выбраны'
-                      : 'Например: 3,5,7 или 3-7',
-                  helperText: widget.lockSeatSelection
-                      ? 'Места заблокированы'
-                      : 'Можно указать несколько мест через запятую (3,5,7) или диапазон (3-7)',
-                ),
-                keyboardType: TextInputType.text,
-                validator: widget.lockSeatSelection
-                    ? null
-                    : (value) {
-                        if (value == null || value.trim().isEmpty) {
-                          return 'Введите номера мест';
-                        }
-                        final seats = _parseSeatNumbers(value.trim());
-                        if (seats.isEmpty) {
-                          return 'Введите корректные номера мест';
-                        }
-                        if (seats.any((s) => s <= 0 || s > 100)) {
-                          return 'Номера мест должны быть от 1 до 100';
-                        }
-                        return null;
-                      },
-                onChanged: (value) {
-                  if (!widget.lockSeatSelection) {
+              // Поле для ввода мест (если не заблокировано)
+              if (!widget.lockSeatSelection) ...[
+                TextFormField(
+                  controller: _seatsController,
+                  decoration: const InputDecoration(
+                    labelText: 'Места',
+                    hintText: 'Например: 3,5,7 или 3-7',
+                    helperText:
+                        'Можно указать несколько мест через запятую (3,5,7) или диапазон (3-7)',
+                  ),
+                  keyboardType: TextInputType.text,
+                  validator: (value) {
+                    if (value == null || value.trim().isEmpty) {
+                      return 'Введите номера мест';
+                    }
                     final seats = _parseSeatNumbers(value.trim());
-                    setState(() {
-                      // Обновляем список мест, сохраняя типы пассажиров для существующих
-                      final existingSeats =
-                          _seatsWithTypes.map((s) => s.seatNumber).toSet();
-                      _seatsWithTypes
-                          .removeWhere((s) => !seats.contains(s.seatNumber));
-                      for (final seatNum in seats) {
-                        if (!existingSeats.contains(seatNum)) {
-                          _seatsWithTypes.add(SeatBooking(
-                            seatNumber: seatNum,
-                            passengerType: PassengerType.adult,
-                            withEntry: false,
-                          ));
-                        }
-                      }
-                    });
-                  }
-                },
-              ),
-              if (_seatsWithTypes.isNotEmpty) ...[
+                    if (seats.isEmpty) {
+                      return 'Введите корректные номера мест';
+                    }
+                    if (seats.any((s) => s <= 0 || s > 100)) {
+                      return 'Номера мест должны быть от 1 до 100';
+                    }
+                    return null;
+                  },
+                  onChanged: (_) => _updateSeats(),
+                ),
                 const SizedBox(height: 16),
-                const Text(
-                  'Тип пассажира для каждого места:',
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 8),
-                ..._seatsWithTypes.map((seatBooking) => Padding(
-                      padding: const EdgeInsets.only(bottom: 12),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Место №${seatBooking.seatNumber}',
-                            style: const TextStyle(
-                              fontWeight: FontWeight.w600,
-                              fontSize: 14,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: DropdownButtonFormField<PassengerType>(
-                                  value: seatBooking.passengerType,
-                                  items: PassengerType.values
-                                      .map(
-                                        (type) => DropdownMenuItem(
-                                          value: type,
-                                          child: Text(type.label),
-                                        ),
-                                      )
-                                      .toList(),
-                                  onChanged: (value) {
-                                    if (value != null) {
-                                      setState(() {
-                                        final index =
-                                            _seatsWithTypes.indexWhere(
-                                          (s) =>
-                                              s.seatNumber ==
-                                              seatBooking.seatNumber,
-                                        );
-                                        if (index != -1) {
-                                          _seatsWithTypes[index] = SeatBooking(
-                                            seatNumber: seatBooking.seatNumber,
-                                            passengerType: value,
-                                            withEntry: seatBooking.withEntry,
-                                          );
-                                        }
-                                      });
-                                    }
-                                  },
-                                  decoration: const InputDecoration(
-                                    labelText: 'Тип пассажира',
-                                    isDense: true,
-                                    contentPadding: EdgeInsets.symmetric(
-                                        horizontal: 8, vertical: 8),
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: DropdownButtonFormField<bool>(
-                                  value: seatBooking.withEntry,
-                                  items: const [
-                                    DropdownMenuItem(
-                                      value: false,
-                                      child: Text('Без входа'),
-                                    ),
-                                    DropdownMenuItem(
-                                      value: true,
-                                      child: Text('Со входом'),
-                                    ),
-                                  ],
-                                  onChanged: (value) {
-                                    if (value != null) {
-                                      setState(() {
-                                        final index =
-                                            _seatsWithTypes.indexWhere(
-                                          (s) =>
-                                              s.seatNumber ==
-                                              seatBooking.seatNumber,
-                                        );
-                                        if (index != -1) {
-                                          _seatsWithTypes[index] = SeatBooking(
-                                            seatNumber: seatBooking.seatNumber,
-                                            passengerType:
-                                                seatBooking.passengerType,
-                                            withEntry: value,
-                                          );
-                                        }
-                                      });
-                                    }
-                                  },
-                                  decoration: const InputDecoration(
-                                    labelText: 'Вход',
-                                    isDense: true,
-                                    contentPadding: EdgeInsets.symmetric(
-                                        horizontal: 8, vertical: 8),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    )),
-                const SizedBox(height: 8),
-                Builder(
-                  builder: (context) {
-                    double total = 0;
-                    for (final seat in _seatsWithTypes) {
-                      final tariff =
-                          widget.tariffs[seat.passengerType.apiValue];
-                      if (tariff != null) {
-                        final price = seat.withEntry
-                            ? (tariff.priceWithEntry ?? tariff.price)
-                            : (tariff.priceWithoutEntry ?? tariff.price);
-                        total += price;
-                      }
-                    }
-                    return Text(
-                      'Итого: ${total.toStringAsFixed(2)} ₽',
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
-                      ),
-                    );
-                  },
-                ),
               ],
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: _nameController,
-                decoration: const InputDecoration(labelText: 'Имя клиента'),
-                validator: (value) {
-                  if (value == null || value.trim().isEmpty) {
-                    return 'Введите имя';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: _phoneController,
-                decoration: const InputDecoration(labelText: 'Телефон клиента'),
-                keyboardType: TextInputType.phone,
-                validator: (value) {
-                  if (value == null || value.trim().isEmpty) {
-                    return 'Введите телефон';
-                  }
-                  return null;
-                },
-              ),
-              // Показываем общий тип пассажира только если не используется множественный выбор
-              if (widget.lockSeatSelection || _seatsWithTypes.isEmpty) ...[
-                const SizedBox(height: 12),
-                DropdownButtonFormField<PassengerType>(
-                  value: _passengerType,
-                  items: PassengerType.values
-                      .map(
-                        (type) => DropdownMenuItem(
-                          value: type,
-                          child: Text(type.label),
-                        ),
-                      )
+
+              // Табы для каждого места
+              if (hasSeats) ...[
+                TabBar(
+                  controller: _tabController,
+                  isScrollable: true,
+                  tabs: _seatNumbers
+                      .map((seatNum) => Tab(text: 'Место $seatNum'))
                       .toList(),
-                  onChanged: (value) {
-                    if (value != null) {
-                      setState(() => _passengerType = value);
-                    }
-                  },
-                  decoration: const InputDecoration(labelText: 'Тип пассажира'),
                 ),
-                const SizedBox(height: 12),
-                Builder(
-                  builder: (context) {
-                    final tariff = widget.tariffs[_passengerType.apiValue];
-                    if (tariff != null) {
-                      // Показываем обе цены для старого формата
-                      final priceWithout =
-                          tariff.priceWithoutEntry ?? tariff.price;
-                      final priceWith = tariff.priceWithEntry ?? tariff.price;
-                      if (priceWithout != priceWith) {
-                        return Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Без входа: ${priceWithout.toStringAsFixed(2)} ₽',
-                            ),
-                            Text(
-                              'Со входом: ${priceWith.toStringAsFixed(2)} ₽',
-                            ),
-                          ],
-                        );
-                      } else {
-                        return Text(
-                          'Цена за место: ${tariff.price.toStringAsFixed(2)} ₽',
-                        );
-                      }
-                    }
-                    return const Text(
-                      'Цена для выбранного типа не настроена',
-                      style: TextStyle(
-                          color: Colors.red, fontWeight: FontWeight.w600),
-                    );
-                  },
+                SizedBox(
+                  height: 400,
+                  child: TabBarView(
+                    controller: _tabController,
+                    children: _seatNumbers.map((seatNum) {
+                      return _buildSeatTab(seatNum);
+                    }).toList(),
+                  ),
+                ),
+              ] else ...[
+                // Если мест нет, показываем сообщение
+                const Padding(
+                  padding: EdgeInsets.all(24),
+                  child: Center(
+                    child: Text('Введите номера мест для бронирования'),
+                  ),
                 ),
               ],
-              const SizedBox(height: 12),
+
+              const SizedBox(height: 16),
+
+              // Общая остановка для всех мест
               DropdownButtonFormField<int>(
                 value: _stopId,
                 decoration: const InputDecoration(labelText: 'Остановка'),
@@ -360,6 +186,34 @@ class _BookingDialogState extends State<BookingDialog> {
                 validator: (value) =>
                     value == null ? 'Выберите остановку' : null,
               ),
+
+              // Итоговая сумма
+              if (hasSeats) ...[
+                const SizedBox(height: 16),
+                Builder(
+                  builder: (context) {
+                    double total = 0;
+                    for (final seatNum in _seatNumbers) {
+                      final data = _seatData[seatNum]!;
+                      final tariff =
+                          widget.tariffs[data.passengerType.apiValue];
+                      if (tariff != null) {
+                        final price = data.withEntry
+                            ? (tariff.priceWithEntry ?? tariff.price)
+                            : (tariff.priceWithoutEntry ?? tariff.price);
+                        total += price;
+                      }
+                    }
+                    return Text(
+                      'Итого: ${total.toStringAsFixed(2)} ₽',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
+                    );
+                  },
+                ),
+              ],
             ],
           ),
         ),
@@ -375,66 +229,65 @@ class _BookingDialogState extends State<BookingDialog> {
               return;
             }
 
-            // Используем новый формат если выбрано несколько мест с разными типами
-            if (_seatsWithTypes.isNotEmpty) {
-              // Проверяем, что для всех мест есть тарифы
-              for (final seat in _seatsWithTypes) {
-                final tariff = widget.tariffs[seat.passengerType.apiValue];
-                if (tariff == null) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        'Цена для типа "${seat.passengerType.label}" на месте №${seat.seatNumber} не настроена',
-                      ),
-                    ),
-                  );
-                  return;
-                }
-              }
-
-              Navigator.of(context).pop(
-                BookingDialogResult(
-                  seats: _seatsWithTypes,
-                  seatNumbers:
-                      _seatsWithTypes.map((s) => s.seatNumber).toList(),
-                  pricePerSeat: 0, // Не используется в новом формате
-                  customerName: _nameController.text.trim(),
-                  customerPhone: _phoneController.text.trim(),
-                  passengerType: _passengerType, // Для обратной совместимости
-                  stop: _selectedStop!,
-                ),
-              );
-              return;
-            }
-
-            // Старый формат: одно место или несколько мест с одним типом
-            final seatNumbers = widget.lockSeatSelection
-                ? _seatNumbers
-                : _parseSeatNumbers(_seatsController.text.trim());
-
-            if (seatNumbers.isEmpty) {
+            if (!hasSeats) {
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(content: Text('Введите номера мест')),
               );
               return;
             }
 
-            final pricePerSeat = widget.tariffs[_passengerType.apiValue]?.price;
-            if (pricePerSeat == null) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                    content: Text('Цена для выбранного типа не настроена')),
-              );
-              return;
+            // Проверяем, что для всех мест заполнены данные
+            for (final seatNum in _seatNumbers) {
+              final data = _seatData[seatNum]!;
+              if (data.nameController.text.trim().isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                      content:
+                          Text('Введите имя пассажира для места $seatNum')),
+                );
+                return;
+              }
+              if (data.phoneController.text.trim().isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                      content:
+                          Text('Введите телефон пассажира для места $seatNum')),
+                );
+                return;
+              }
+              final tariff = widget.tariffs[data.passengerType.apiValue];
+              if (tariff == null) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                      content: Text(
+                          'Цена для типа "${data.passengerType.label}" на месте $seatNum не настроена')),
+                );
+                return;
+              }
             }
+
+            // Собираем все места с данными
+            final seats = _seatNumbers.map((seatNum) {
+              final data = _seatData[seatNum]!;
+              return SeatBooking(
+                seatNumber: seatNum,
+                passengerType: data.passengerType,
+                withEntry: data.withEntry,
+                customerName: data.nameController.text.trim(),
+                customerPhone: data.phoneController.text.trim(),
+              );
+            }).toList();
 
             Navigator.of(context).pop(
               BookingDialogResult(
-                seatNumbers: seatNumbers,
-                pricePerSeat: pricePerSeat,
-                customerName: _nameController.text.trim(),
-                customerPhone: _phoneController.text.trim(),
-                passengerType: _passengerType,
+                seats: seats,
+                seatNumbers: _seatNumbers,
+                pricePerSeat: 0, // Не используется в новом формате
+                customerName:
+                    _seatData[_seatNumbers.first]!.nameController.text.trim(),
+                customerPhone:
+                    _seatData[_seatNumbers.first]!.phoneController.text.trim(),
+                passengerType: _seatData[_seatNumbers.first]!.passengerType,
                 stop: _selectedStop!,
               ),
             );
@@ -442,6 +295,98 @@ class _BookingDialogState extends State<BookingDialog> {
           child: const Text('Сохранить'),
         ),
       ],
+    );
+  }
+
+  Widget _buildSeatTab(int seatNum) {
+    final data = _seatData[seatNum]!;
+
+    return SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const SizedBox(height: 16),
+          TextFormField(
+            controller: data.nameController,
+            decoration: const InputDecoration(labelText: 'Имя пассажира'),
+            validator: (value) {
+              if (value == null || value.trim().isEmpty) {
+                return 'Введите имя';
+              }
+              return null;
+            },
+          ),
+          const SizedBox(height: 12),
+          TextFormField(
+            controller: data.phoneController,
+            decoration: const InputDecoration(labelText: 'Телефон пассажира'),
+            keyboardType: TextInputType.phone,
+            validator: (value) {
+              if (value == null || value.trim().isEmpty) {
+                return 'Введите телефон';
+              }
+              return null;
+            },
+          ),
+          const SizedBox(height: 12),
+          DropdownButtonFormField<PassengerType>(
+            value: data.passengerType,
+            items: PassengerType.values
+                .map(
+                  (type) => DropdownMenuItem(
+                    value: type,
+                    child: Text(type.label),
+                  ),
+                )
+                .toList(),
+            onChanged: (value) {
+              if (value != null) {
+                setState(() {
+                  data.passengerType = value;
+                });
+              }
+            },
+            decoration: const InputDecoration(labelText: 'Тип пассажира'),
+          ),
+          const SizedBox(height: 12),
+          CheckboxListTile(
+            title: const Text('Входной билет'),
+            value: data.withEntry,
+            onChanged: (value) {
+              if (value != null) {
+                setState(() {
+                  data.withEntry = value;
+                });
+              }
+            },
+          ),
+          const SizedBox(height: 12),
+          Builder(
+            builder: (context) {
+              final tariff = widget.tariffs[data.passengerType.apiValue];
+              if (tariff != null) {
+                final price = data.withEntry
+                    ? (tariff.priceWithEntry ?? tariff.price)
+                    : (tariff.priceWithoutEntry ?? tariff.price);
+                return Text(
+                  'Цена: ${price.toStringAsFixed(2)} ₽',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                  ),
+                );
+              }
+              return const Text(
+                'Цена для выбранного типа не настроена',
+                style: TextStyle(
+                  color: Colors.red,
+                  fontWeight: FontWeight.w600,
+                ),
+              );
+            },
+          ),
+        ],
+      ),
     );
   }
 
@@ -477,6 +422,17 @@ class _BookingDialogState extends State<BookingDialog> {
 
     return result.toList()..sort();
   }
+}
+
+class _SeatPassengerData {
+  _SeatPassengerData()
+      : nameController = TextEditingController(),
+        phoneController = TextEditingController();
+
+  final TextEditingController nameController;
+  final TextEditingController phoneController;
+  PassengerType passengerType = PassengerType.adult;
+  bool withEntry = false;
 }
 
 class BookingDialogResult {

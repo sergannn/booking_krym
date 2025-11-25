@@ -17,11 +17,11 @@ class User {
 
   factory User.fromJson(Map<String, dynamic> json) {
     return User(
-      id: json['id'] as int,
-      name: json['name'] as String,
-      email: json['email'] as String,
-      role: json['role'] as String,
-      roleId: json['role_id'] as int,
+      id: (json['id'] as num?)?.toInt() ?? 0,
+      name: json['name'] as String? ?? '',
+      email: json['email'] as String? ?? '',
+      role: json['role'] as String? ?? '',
+      roleId: (json['role_id'] as num?)?.toInt() ?? 0,
       isSuperUser: json['is_super_user'] as bool? ?? false,
     );
   }

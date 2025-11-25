@@ -109,3 +109,9 @@ final scheduleFutureProvider = FutureProvider<List<ScheduleTemplate>>((ref) {
   final repository = ref.watch(scheduleRepositoryProvider);
   return repository.fetchSchedule();
 });
+
+final staffProfitFutureProvider =
+    FutureProvider.family<Map<String, dynamic>, int>((ref, userId) {
+  final repository = ref.watch(walletRepositoryProvider);
+  return repository.fetchStaffProfit(userId);
+});

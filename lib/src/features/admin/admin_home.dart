@@ -25,7 +25,7 @@ class AdminHomePage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
-      length: 6,
+      length: 3,
       child: Scaffold(
         appBar: AppBar(
           title: Text('Администратор — ${user.name}'),
@@ -63,25 +63,120 @@ class AdminHomePage extends StatelessWidget {
           bottom: const TabBar(
             tabs: [
               Tab(text: 'Бронирование'),
-              Tab(text: 'Кошелёк'),
               Tab(text: 'Статистика'),
-              Tab(text: 'Расписание'),
               Tab(text: 'Сотрудники'),
-              Tab(text: 'Цены'),
             ],
           ),
         ),
+        drawer: _AdminDrawer(user: user),
         body: TabBarView(
           children: [
             _AdminBookingTab(user: user),
-            _AdminWalletTab(user: user),
             const _AdminStatisticsTab(),
-            const _AdminScheduleTab(),
             UsersTab(currentUserId: user.id),
-            const PricesTab(),
           ],
         ),
       ),
+    );
+  }
+}
+
+class _AdminDrawer extends ConsumerWidget {
+  const _AdminDrawer({required this.user});
+
+  final User user;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return Drawer(
+      child: ListView(
+        padding: EdgeInsets.zero,
+        children: [
+          DrawerHeader(
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.primary,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                Text(
+                  'Администратор',
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                      ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  user.name,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: Colors.white70,
+                      ),
+                ),
+              ],
+            ),
+          ),
+          ListTile(
+            leading: const Icon(Icons.account_balance_wallet),
+            title: const Text('Кошелёк'),
+            onTap: () {
+              Navigator.of(context).pop();
+              _showPage(context, _AdminWalletTab(user: user));
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.calendar_today),
+            title: const Text('Расписание'),
+            onTap: () {
+              Navigator.of(context).pop();
+              _showPage(context, const _AdminScheduleTab());
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.currency_ruble),
+            title: const Text('Цены'),
+            onTap: () {
+              Navigator.of(context).pop();
+              _showPage(context, const PricesTab());
+            },
+          ),
+          const Divider(),
+          ListTile(
+            leading: const Icon(Icons.info_outline),
+            title: const Text('О приложении'),
+            onTap: () {
+              Navigator.of(context).pop();
+              showAboutDialog(
+                context: context,
+                applicationName: 'Система управления экскурсиями',
+                applicationVersion: '1.0.0',
+              );
+            },
+          ),
+          const Divider(),
+          ListTile(
+            leading: const Icon(Icons.logout),
+            title: const Text('Выход'),
+            onTap: () async {
+              Navigator.of(context).pop();
+              await ref.read(authControllerProvider.notifier).signOut();
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showPage(BuildContext context, Widget page) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+          builder: (_) => Scaffold(
+                appBar: AppBar(
+                  title: const Text('Администратор'),
+                ),
+                body: page,
+              )),
     );
   }
 }
@@ -153,7 +248,6 @@ class _NewBookingSubTabState extends ConsumerState<_NewBookingSubTab> {
   @override
   Widget build(BuildContext context) {
     final excursionsAsync = ref.watch(excursionsFutureProvider);
-    final formatter = DateFormat('dd.MM.yyyy HH:mm');
 
     return RefreshIndicator(
       onRefresh: () async {
@@ -239,15 +333,50 @@ class _NewBookingSubTabState extends ConsumerState<_NewBookingSubTab> {
                 );
               }
 
+              // Группируем по датам
+              final groups = <DateTime, List<Excursion>>{};
+              for (final excursion in futureExcursions) {
+                final key = DateTime(
+                  excursion.dateTime.year,
+                  excursion.dateTime.month,
+                  excursion.dateTime.day,
+                );
+                groups.putIfAbsent(key, () => []).add(excursion);
+              }
+              final sortedDates = groups.keys.toList()..sort();
+              final dateFormatter = DateFormat('EEEE, dd MMMM yyyy', 'ru_RU');
+              final timeFormatter = DateFormat('HH:mm');
+
               return ListView.builder(
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
-                itemCount: futureExcursions.length,
+                itemCount: sortedDates.length,
                 itemBuilder: (context, index) {
-                  final excursion = futureExcursions[index];
-                  return _AdminExcursionCard(
-                    excursion: excursion,
-                    formatter: formatter,
+                  final date = sortedDates[index];
+                  final dayItems = groups[date]!;
+                  return Card(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    child: ExpansionTile(
+                      title: Text(
+                        dateFormatter.format(date),
+                        style:
+                            Theme.of(context).textTheme.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                ),
+                      ),
+                      subtitle: Text(
+                          '${dayItems.length} ${dayItems.length == 1 ? 'экскурсия' : dayItems.length < 5 ? 'экскурсии' : 'экскурсий'}'),
+                      children: dayItems
+                          .map((excursion) => Padding(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 8, vertical: 4),
+                                child: _AdminExcursionCard(
+                                  excursion: excursion,
+                                  formatter: timeFormatter,
+                                ),
+                              ))
+                          .toList(),
+                    ),
                   );
                 },
               );
@@ -268,8 +397,22 @@ class _MyBookingsSubTab extends ConsumerStatefulWidget {
   ConsumerState<_MyBookingsSubTab> createState() => _MyBookingsSubTabState();
 }
 
-class _MyBookingsSubTabState extends ConsumerState<_MyBookingsSubTab> {
+class _MyBookingsSubTabState extends ConsumerState<_MyBookingsSubTab>
+    with SingleTickerProviderStateMixin {
   DateTime? _selectedDate;
+  late TabController _tabController;
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 2, vsync: this);
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
 
   Future<void> _selectDate(BuildContext context) async {
     final picked = await showDatePicker(
@@ -289,6 +432,199 @@ class _MyBookingsSubTabState extends ConsumerState<_MyBookingsSubTab> {
   Widget build(BuildContext context) {
     final bookingsAsync = ref.watch(bookingsFutureProvider);
 
+    return bookingsAsync.when(
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (error, _) => Padding(
+        padding: const EdgeInsets.all(16),
+        child: Text('Не удалось загрузить бронирования: $error'),
+      ),
+      data: (groups) {
+        // Фильтруем только бронирования текущего пользователя
+        final myGroups = groups
+            .map((group) {
+              final myBookings = group.bookings
+                  .where((booking) => booking.bookedBy == widget.user.id)
+                  .toList();
+              if (myBookings.isEmpty) return null;
+              return BookingGroup(
+                excursion: group.excursion,
+                bookings: myBookings,
+              );
+            })
+            .whereType<BookingGroup>()
+            .toList();
+
+        // Разделяем на новые (будущие) и старые (прошедшие)
+        final now = DateTime.now();
+        final newGroups = <BookingGroup>[];
+        final oldGroups = <BookingGroup>[];
+
+        for (final group in myGroups) {
+          if (group.excursion.dateTime.isAfter(now)) {
+            newGroups.add(group);
+          } else {
+            oldGroups.add(group);
+          }
+        }
+
+        // Сортируем внутри групп по датам
+        newGroups.sort(
+            (a, b) => a.excursion.dateTime.compareTo(b.excursion.dateTime));
+        oldGroups.sort(
+            (a, b) => b.excursion.dateTime.compareTo(a.excursion.dateTime));
+
+        // Фильтруем по выбранной дате
+        final filterByDate = (List<BookingGroup> groups) {
+          if (_selectedDate == null) return groups;
+          return groups.where((group) {
+            final excursionDate = DateTime(
+              group.excursion.dateTime.year,
+              group.excursion.dateTime.month,
+              group.excursion.dateTime.day,
+            );
+            final selectedDateOnly = DateTime(
+              _selectedDate!.year,
+              _selectedDate!.month,
+              _selectedDate!.day,
+            );
+            return excursionDate == selectedDateOnly;
+          }).toList();
+        };
+
+        final filteredNewGroups = filterByDate(newGroups);
+        final filteredOldGroups = filterByDate(oldGroups);
+
+        // Группируем по датам экскурсий
+        final groupByDate = (List<BookingGroup> groups) {
+          final dateGroups = <DateTime, List<BookingGroup>>{};
+          for (final group in groups) {
+            final date = DateTime(
+              group.excursion.dateTime.year,
+              group.excursion.dateTime.month,
+              group.excursion.dateTime.day,
+            );
+            dateGroups.putIfAbsent(date, () => []).add(group);
+          }
+          return dateGroups;
+        };
+
+        final newDateGroups = groupByDate(filteredNewGroups);
+        final oldDateGroups = groupByDate(filteredOldGroups);
+        final sortedNewDates = newDateGroups.keys.toList()..sort();
+        final sortedOldDates = oldDateGroups.keys.toList()
+          ..sort((a, b) => b.compareTo(a));
+
+        final subFormatter = DateFormat('dd.MM.yyyy HH:mm');
+        final dateFormatter = DateFormat('EEEE, dd MMMM yyyy', 'ru_RU');
+        final timeFormatter = DateFormat('HH:mm');
+
+        return Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Мои бронирования',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  OutlinedButton.icon(
+                    icon: const Icon(Icons.calendar_today, size: 18),
+                    label: Text(
+                      _selectedDate == null
+                          ? 'Выбрать дату'
+                          : DateFormat('dd.MM.yyyy').format(_selectedDate!),
+                    ),
+                    onPressed: () => _selectDate(context),
+                  ),
+                ],
+              ),
+            ),
+            if (_selectedDate != null)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: TextButton.icon(
+                  icon: const Icon(Icons.clear, size: 18),
+                  label: const Text('Сбросить фильтр'),
+                  onPressed: () {
+                    setState(() {
+                      _selectedDate = null;
+                    });
+                  },
+                ),
+              ),
+            TabBar(
+              controller: _tabController,
+              tabs: const [
+                Tab(text: 'Новые'),
+                Tab(text: 'Прошедшие'),
+              ],
+            ),
+            Expanded(
+              child: TabBarView(
+                controller: _tabController,
+                children: [
+                  _buildBookingsList(
+                    context,
+                    ref,
+                    sortedNewDates,
+                    newDateGroups,
+                    dateFormatter,
+                    timeFormatter,
+                    subFormatter,
+                    'Нет ваших новых бронирований',
+                  ),
+                  _buildBookingsList(
+                    context,
+                    ref,
+                    sortedOldDates,
+                    oldDateGroups,
+                    dateFormatter,
+                    timeFormatter,
+                    subFormatter,
+                    'Нет ваших прошедших бронирований',
+                  ),
+                ],
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildBookingsList(
+    BuildContext context,
+    WidgetRef ref,
+    List<DateTime> sortedDates,
+    Map<DateTime, List<BookingGroup>> dateGroups,
+    DateFormat dateFormatter,
+    DateFormat timeFormatter,
+    DateFormat subFormatter,
+    String emptyMessage,
+  ) {
+    if (dateGroups.isEmpty || sortedDates.isEmpty) {
+      return RefreshIndicator(
+        onRefresh: () async {
+          ref.invalidate(bookingsFutureProvider);
+          await ref.read(bookingsFutureProvider.future);
+        },
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          child: SizedBox(
+            height: MediaQuery.of(context).size.height * 0.5,
+            child: Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Text(emptyMessage),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
     return RefreshIndicator(
       onRefresh: () async {
         ref.invalidate(bookingsFutureProvider);
@@ -296,132 +632,47 @@ class _MyBookingsSubTabState extends ConsumerState<_MyBookingsSubTab> {
       },
       child: ListView(
         padding: const EdgeInsets.all(16),
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'Мои бронирования',
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
-              OutlinedButton.icon(
-                icon: const Icon(Icons.calendar_today, size: 18),
-                label: Text(
-                  _selectedDate == null
-                      ? 'Выбрать дату'
-                      : DateFormat('dd.MM.yyyy').format(_selectedDate!),
-                ),
-                onPressed: () => _selectDate(context),
-              ),
-            ],
-          ),
-          if (_selectedDate != null) ...[
-            const SizedBox(height: 8),
-            TextButton.icon(
-              icon: const Icon(Icons.clear, size: 18),
-              label: const Text('Сбросить фильтр'),
-              onPressed: () {
-                setState(() {
-                  _selectedDate = null;
-                });
-              },
-            ),
-          ],
-          const SizedBox(height: 8),
-          bookingsAsync.when(
-            loading: () => const Padding(
-              padding: EdgeInsets.symmetric(vertical: 24),
-              child: Center(child: CircularProgressIndicator()),
-            ),
-            error: (error, _) => Padding(
-              padding: const EdgeInsets.symmetric(vertical: 12),
-              child: Text('Не удалось загрузить бронирования: $error'),
-            ),
-            data: (groups) {
-              // Фильтруем только бронирования текущего пользователя
-              final myGroups = groups
-                  .map((group) {
-                    final myBookings = group.bookings
-                        .where((booking) => booking.bookedBy == widget.user.id)
-                        .toList();
-                    if (myBookings.isEmpty) return null;
-                    return BookingGroup(
-                      excursion: group.excursion,
-                      bookings: myBookings,
-                    );
-                  })
-                  .whereType<BookingGroup>()
-                  .toList();
-
-              // Фильтруем по выбранной дате
-              final filteredGroups = _selectedDate == null
-                  ? myGroups
-                  : myGroups.where((group) {
-                      final excursionDate = DateTime(
-                        group.excursion.dateTime.year,
-                        group.excursion.dateTime.month,
-                        group.excursion.dateTime.day,
-                      );
-                      final selectedDateOnly = DateTime(
-                        _selectedDate!.year,
-                        _selectedDate!.month,
-                        _selectedDate!.day,
-                      );
-                      return excursionDate == selectedDateOnly;
-                    }).toList();
-
-              if (filteredGroups.isEmpty) {
-                return Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 24),
-                  child: Text(
-                    _selectedDate == null
-                        ? 'Нет ваших бронирований'
-                        : 'Нет ваших бронирований на выбранную дату',
-                    textAlign: TextAlign.center,
-                  ),
-                );
-              }
-              return ListView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                itemCount: filteredGroups.length,
-                itemBuilder: (context, index) {
-                  final group = filteredGroups[index];
-                  final subFormatter = DateFormat('dd.MM.yyyy HH:mm');
-                  return Card(
-                    margin: const EdgeInsets.only(bottom: 12),
-                    child: ExpansionTile(
-                      title: Text(group.excursion.title),
-                      subtitle: Text(
-                        '${subFormatter.format(group.excursion.dateTime)} • ${group.bookings.length} мест',
-                        style: const TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                      children: group.bookings
-                          .map(
-                            (booking) => ListTile(
-                              title: Text('Место ${booking.seat.seatNumber}'),
-                              subtitle: Text(
-                                'Бронировано: ${subFormatter.format(booking.bookedAt)}',
-                              ),
-                              trailing: IconButton(
-                                icon: const Icon(Icons.cancel),
-                                tooltip: 'Отменить',
-                                onPressed: () => _cancelBooking(
-                                  context,
-                                  ref,
-                                  booking.id,
-                                ),
-                              ),
-                            ),
-                          )
-                          .toList(),
+        children: sortedDates.map((date) {
+          final groups = dateGroups[date]!;
+          final totalBookings =
+              groups.fold<int>(0, (sum, g) => sum + g.bookings.length);
+          return Card(
+            margin: const EdgeInsets.only(bottom: 12),
+            child: ExpansionTile(
+              title: Text(
+                dateFormatter.format(date),
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
                     ),
-                  );
-                },
-              );
-            },
-          ),
-        ],
+              ),
+              subtitle: Text(
+                  '$totalBookings ${totalBookings == 1 ? 'бронирование' : totalBookings < 5 ? 'бронирования' : 'бронирований'}'),
+              children: groups.map((group) {
+                return ExpansionTile(
+                  title: Text(group.excursion.title),
+                  subtitle: Text(
+                    '${timeFormatter.format(group.excursion.dateTime)} • ${group.bookings.length} место${group.bookings.length > 1 ? 'а' : ''}${group.excursion.maxSeats != null ? ' из ${group.excursion.maxSeats}' : ''}',
+                  ),
+                  children: group.bookings
+                      .map(
+                        (booking) => ListTile(
+                          title: Text('Место ${booking.seat.seatNumber}'),
+                          subtitle: Text(
+                              'Бронировано: ${subFormatter.format(booking.bookedAt)}'),
+                          trailing: IconButton(
+                            icon: const Icon(Icons.cancel),
+                            tooltip: 'Отменить',
+                            onPressed: () =>
+                                _cancelBooking(context, ref, booking.id),
+                          ),
+                        ),
+                      )
+                      .toList(),
+                );
+              }).toList(),
+            ),
+          );
+        }).toList(),
       ),
     );
   }
@@ -465,8 +716,22 @@ class _AllBookingsSubTab extends ConsumerStatefulWidget {
   ConsumerState<_AllBookingsSubTab> createState() => _AllBookingsSubTabState();
 }
 
-class _AllBookingsSubTabState extends ConsumerState<_AllBookingsSubTab> {
+class _AllBookingsSubTabState extends ConsumerState<_AllBookingsSubTab>
+    with SingleTickerProviderStateMixin {
   DateTime? _selectedDate;
+  late TabController _tabController;
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 2, vsync: this);
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
 
   Future<void> _selectDate(BuildContext context) async {
     final picked = await showDatePicker(
@@ -486,6 +751,190 @@ class _AllBookingsSubTabState extends ConsumerState<_AllBookingsSubTab> {
   Widget build(BuildContext context) {
     final bookingsAsync = ref.watch(bookingsFutureProvider);
 
+    return bookingsAsync.when(
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (error, _) => Padding(
+        padding: const EdgeInsets.all(16),
+        child: Text('Не удалось загрузить бронирования: $error'),
+      ),
+      data: (groups) {
+        // Разделяем на новые (будущие) и старые (прошедшие)
+        final now = DateTime.now();
+        final newGroups = <BookingGroup>[];
+        final oldGroups = <BookingGroup>[];
+
+        for (final group in groups) {
+          if (group.excursion.dateTime.isAfter(now)) {
+            newGroups.add(group);
+          } else {
+            oldGroups.add(group);
+          }
+        }
+
+        // Сортируем внутри групп по датам
+        newGroups.sort(
+            (a, b) => a.excursion.dateTime.compareTo(b.excursion.dateTime));
+        oldGroups.sort(
+            (a, b) => b.excursion.dateTime.compareTo(a.excursion.dateTime));
+
+        // Группируем по датам экскурсий
+        final groupByDate = (List<BookingGroup> groups) {
+          final dateGroups = <DateTime, List<BookingGroup>>{};
+          for (final group in groups) {
+            final date = DateTime(
+              group.excursion.dateTime.year,
+              group.excursion.dateTime.month,
+              group.excursion.dateTime.day,
+            );
+            dateGroups.putIfAbsent(date, () => []).add(group);
+          }
+          return dateGroups;
+        };
+
+        final newDateGroups = groupByDate(newGroups);
+        final oldDateGroups = groupByDate(oldGroups);
+        final sortedNewDates = newDateGroups.keys.toList()..sort();
+        final sortedOldDates = oldDateGroups.keys.toList()
+          ..sort((a, b) => b.compareTo(a));
+
+        // Фильтруем по выбранной дате
+        final filterByDate = (Map<DateTime, List<BookingGroup>> dateGroups) {
+          if (_selectedDate == null) return dateGroups;
+          final selectedDateOnly = DateTime(
+            _selectedDate!.year,
+            _selectedDate!.month,
+            _selectedDate!.day,
+          );
+          return dateGroups.entries
+              .where((entry) => entry.key == selectedDateOnly)
+              .fold<Map<DateTime, List<BookingGroup>>>(
+            {},
+            (map, entry) => map..[entry.key] = entry.value,
+          );
+        };
+
+        final filteredNewDateGroups =
+            _selectedDate == null ? newDateGroups : filterByDate(newDateGroups);
+        final filteredOldDateGroups =
+            _selectedDate == null ? oldDateGroups : filterByDate(oldDateGroups);
+
+        final subFormatter = DateFormat('dd.MM.yyyy HH:mm');
+        final dateFormatter = DateFormat('EEEE, dd MMMM yyyy', 'ru_RU');
+        final timeFormatter = DateFormat('HH:mm');
+
+        return Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Все бронирования',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  OutlinedButton.icon(
+                    icon: const Icon(Icons.calendar_today, size: 18),
+                    label: Text(
+                      _selectedDate == null
+                          ? 'Выбрать дату'
+                          : DateFormat('dd.MM.yyyy').format(_selectedDate!),
+                    ),
+                    onPressed: () => _selectDate(context),
+                  ),
+                ],
+              ),
+            ),
+            if (_selectedDate != null)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: TextButton.icon(
+                  icon: const Icon(Icons.clear, size: 18),
+                  label: const Text('Сбросить фильтр'),
+                  onPressed: () {
+                    setState(() {
+                      _selectedDate = null;
+                    });
+                  },
+                ),
+              ),
+            TabBar(
+              controller: _tabController,
+              tabs: const [
+                Tab(text: 'Новые'),
+                Tab(text: 'Прошедшие'),
+              ],
+            ),
+            Expanded(
+              child: TabBarView(
+                controller: _tabController,
+                children: [
+                  _buildBookingsList(
+                    context,
+                    ref,
+                    sortedNewDates
+                        .where(
+                            (date) => filteredNewDateGroups.containsKey(date))
+                        .toList(),
+                    filteredNewDateGroups,
+                    dateFormatter,
+                    timeFormatter,
+                    subFormatter,
+                    'Нет новых бронирований',
+                  ),
+                  _buildBookingsList(
+                    context,
+                    ref,
+                    sortedOldDates
+                        .where(
+                            (date) => filteredOldDateGroups.containsKey(date))
+                        .toList(),
+                    filteredOldDateGroups,
+                    dateFormatter,
+                    timeFormatter,
+                    subFormatter,
+                    'Нет прошедших бронирований',
+                  ),
+                ],
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildBookingsList(
+    BuildContext context,
+    WidgetRef ref,
+    List<DateTime> sortedDates,
+    Map<DateTime, List<BookingGroup>> dateGroups,
+    DateFormat dateFormatter,
+    DateFormat timeFormatter,
+    DateFormat subFormatter,
+    String emptyMessage,
+  ) {
+    if (dateGroups.isEmpty || sortedDates.isEmpty) {
+      return RefreshIndicator(
+        onRefresh: () async {
+          ref.invalidate(bookingsFutureProvider);
+          await ref.read(bookingsFutureProvider.future);
+        },
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          child: SizedBox(
+            height: MediaQuery.of(context).size.height * 0.5,
+            child: Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Text(emptyMessage),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
     return RefreshIndicator(
       onRefresh: () async {
         ref.invalidate(bookingsFutureProvider);
@@ -493,117 +942,47 @@ class _AllBookingsSubTabState extends ConsumerState<_AllBookingsSubTab> {
       },
       child: ListView(
         padding: const EdgeInsets.all(16),
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'Все бронирования',
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
-              OutlinedButton.icon(
-                icon: const Icon(Icons.calendar_today, size: 18),
-                label: Text(
-                  _selectedDate == null
-                      ? 'Выбрать дату'
-                      : DateFormat('dd.MM.yyyy').format(_selectedDate!),
-                ),
-                onPressed: () => _selectDate(context),
-              ),
-            ],
-          ),
-          if (_selectedDate != null) ...[
-            const SizedBox(height: 8),
-            TextButton.icon(
-              icon: const Icon(Icons.clear, size: 18),
-              label: const Text('Сбросить фильтр'),
-              onPressed: () {
-                setState(() {
-                  _selectedDate = null;
-                });
-              },
-            ),
-          ],
-          const SizedBox(height: 8),
-          bookingsAsync.when(
-            loading: () => const Padding(
-              padding: EdgeInsets.symmetric(vertical: 24),
-              child: Center(child: CircularProgressIndicator()),
-            ),
-            error: (error, _) => Padding(
-              padding: const EdgeInsets.symmetric(vertical: 12),
-              child: Text('Не удалось загрузить бронирования: $error'),
-            ),
-            data: (groups) {
-              // Фильтруем по выбранной дате
-              final filteredGroups = _selectedDate == null
-                  ? groups
-                  : groups.where((group) {
-                      final excursionDate = DateTime(
-                        group.excursion.dateTime.year,
-                        group.excursion.dateTime.month,
-                        group.excursion.dateTime.day,
-                      );
-                      final selectedDateOnly = DateTime(
-                        _selectedDate!.year,
-                        _selectedDate!.month,
-                        _selectedDate!.day,
-                      );
-                      return excursionDate == selectedDateOnly;
-                    }).toList();
-
-              if (filteredGroups.isEmpty) {
-                return Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 24),
-                  child: Text(
-                    _selectedDate == null
-                        ? 'Нет активных бронирований'
-                        : 'Нет бронирований на выбранную дату',
-                    textAlign: TextAlign.center,
-                  ),
-                );
-              }
-              return ListView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                itemCount: filteredGroups.length,
-                itemBuilder: (context, index) {
-                  final group = filteredGroups[index];
-                  final subFormatter = DateFormat('dd.MM.yyyy HH:mm');
-                  return Card(
-                    margin: const EdgeInsets.only(bottom: 12),
-                    child: ExpansionTile(
-                      title: Text(group.excursion.title),
-                      subtitle: Text(
-                        '${subFormatter.format(group.excursion.dateTime)} • ${group.bookings.length} мест',
-                        style: const TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                      children: group.bookings
-                          .map(
-                            (booking) => ListTile(
-                              title: Text('Место ${booking.seat.seatNumber}'),
-                              subtitle: Text(
-                                'Бронировано: ${subFormatter.format(booking.bookedAt)}',
-                              ),
-                              trailing: IconButton(
-                                icon: const Icon(Icons.cancel),
-                                tooltip: 'Отменить',
-                                onPressed: () => _cancelBooking(
-                                  context,
-                                  ref,
-                                  booking.id,
-                                ),
-                              ),
-                            ),
-                          )
-                          .toList(),
+        children: sortedDates.map((date) {
+          final groups = dateGroups[date]!;
+          final totalBookings =
+              groups.fold<int>(0, (sum, g) => sum + g.bookings.length);
+          return Card(
+            margin: const EdgeInsets.only(bottom: 12),
+            child: ExpansionTile(
+              title: Text(
+                dateFormatter.format(date),
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
                     ),
-                  );
-                },
-              );
-            },
-          ),
-        ],
+              ),
+              subtitle: Text(
+                  '$totalBookings ${totalBookings == 1 ? 'бронирование' : totalBookings < 5 ? 'бронирования' : 'бронирований'}'),
+              children: groups.map((group) {
+                return ExpansionTile(
+                  title: Text(group.excursion.title),
+                  subtitle: Text(
+                    '${timeFormatter.format(group.excursion.dateTime)} • ${group.bookings.length} место${group.bookings.length > 1 ? 'а' : ''}${group.excursion.maxSeats != null ? ' из ${group.excursion.maxSeats}' : ''}',
+                  ),
+                  children: group.bookings
+                      .map(
+                        (booking) => ListTile(
+                          title: Text('Место ${booking.seat.seatNumber}'),
+                          subtitle: Text(
+                              'Бронировано: ${subFormatter.format(booking.bookedAt)}'),
+                          trailing: IconButton(
+                            icon: const Icon(Icons.cancel),
+                            tooltip: 'Отменить',
+                            onPressed: () =>
+                                _cancelBooking(context, ref, booking.id),
+                          ),
+                        ),
+                      )
+                      .toList(),
+                );
+              }).toList(),
+            ),
+          );
+        }).toList(),
       ),
     );
   }
@@ -641,8 +1020,10 @@ class _AllBookingsSubTabState extends ConsumerState<_AllBookingsSubTab> {
 }
 
 class _AdminExcursionCard extends ConsumerWidget {
-  const _AdminExcursionCard(
-      {super.key, required this.excursion, required this.formatter});
+  const _AdminExcursionCard({
+    required this.excursion,
+    required this.formatter,
+  });
 
   final Excursion excursion;
   final DateFormat formatter;
@@ -653,67 +1034,80 @@ class _AdminExcursionCard extends ConsumerWidget {
     final isAvailable = excursion.availableSeatsCount > 0 && !excursion.isPast;
 
     return Card(
-      margin: const EdgeInsets.only(bottom: 12),
+      margin: const EdgeInsets.only(bottom: 8),
       color: isAvailable
           ? null
           : Colors.grey.shade200, // Серый фон для недоступных
       child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
+        padding: const EdgeInsets.all(12),
+        child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(excursion.title,
-                style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: 8),
-            Text('Дата: ${formatter.format(excursion.dateTime)}'),
-            Text(
-              'Цена (взрослый): ${excursion.priceFor('adult').toStringAsFixed(2)} ₽',
-            ),
-            Text(
-                'Свободно мест: ${excursion.availableSeatsCount} / ${excursion.maxSeats}'),
-            Text(
-                'Забронировано мест: ${excursion.bookedSeatsCount} / ${excursion.maxSeats}'),
-            if (excursion.assignedStaff.isNotEmpty) ...[
-              const SizedBox(height: 12),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: excursion.assignedStaff
-                    .map(
-                      (staff) => Chip(
-                        avatar: Icon(
-                          staff.roleInExcursion == 'driver'
-                              ? Icons.directions_bus
-                              : Icons.record_voice_over,
-                          size: 16,
-                        ),
-                        label: Text(staff.name),
-                      ),
-                    )
-                    .toList(),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '${excursion.title} — ${formatter.format(excursion.dateTime)}',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Цена (взрослый): ${excursion.priceFor('adult').toStringAsFixed(2)} ₽',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                  Text(
+                    'Свободно мест: ${excursion.availableSeatsCount} / ${excursion.maxSeats}',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                  Text(
+                    'Забронировано мест: ${excursion.bookedSeatsCount} / ${excursion.maxSeats}',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                  if (excursion.assignedStaff.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 4,
+                      runSpacing: 4,
+                      children: excursion.assignedStaff
+                          .map(
+                            (staff) => Chip(
+                              avatar: Icon(
+                                staff.roleInExcursion == 'driver'
+                                    ? Icons.directions_bus
+                                    : Icons.record_voice_over,
+                                size: 14,
+                              ),
+                              label: Text(staff.name,
+                                  style: const TextStyle(fontSize: 11)),
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 4),
+                            ),
+                          )
+                          .toList(),
+                    ),
+                  ],
+                ],
               ),
-            ],
-            // Описание скрыто для лучшей видимости
-            const SizedBox(height: 12),
-            Row(
+            ),
+            const SizedBox(width: 8),
+            Column(
               children: [
-                FilledButton.icon(
+                IconButton(
                   icon: const Icon(Icons.event_seat),
-                  label: const Text('Забронировать'),
+                  tooltip: 'Забронировать',
                   onPressed: () => _book(context, ref),
                 ),
-                const SizedBox(width: 12),
-                OutlinedButton.icon(
+                IconButton(
                   icon: const Icon(Icons.list),
-                  label: const Text('Места'),
+                  tooltip: 'Места',
                   onPressed: excursion.busSeats.isEmpty
                       ? null
                       : () => _showSeatSheet(context, ref),
                 ),
-                const SizedBox(width: 12),
-                OutlinedButton.icon(
-                  icon: const Icon(Icons.group_add),
-                  label: const Text('Назначить персонал'),
+                IconButton(
+                  icon: const Icon(Icons.person_add),
+                  tooltip: 'Назначить персонал',
                   onPressed: () => _assignStaff(context, ref),
                 ),
               ],

@@ -26,7 +26,7 @@ class _UsersTabState extends ConsumerState<UsersTab>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(length: 5, vsync: this);
   }
 
   @override
@@ -85,7 +85,9 @@ class _UsersTabState extends ConsumerState<UsersTab>
           tabs: const [
             Tab(text: 'Все'),
             Tab(text: 'Водители'),
-            Tab(text: 'Гиды'),
+            Tab(text: 'Экскурсоводы'),
+            Tab(text: 'Продавцы'),
+            Tab(text: 'Партнеры'),
           ],
         ),
         Expanded(
@@ -95,7 +97,9 @@ class _UsersTabState extends ConsumerState<UsersTab>
               _buildUsersList(usersAsync, null),
               _buildUsersList(usersAsync, 3), // role_id для водителей
               _buildUsersList(usersAsync, null,
-                  isGuide: true), // гиды определяются по назначениям
+                  isGuide: true), // экскурсоводы определяются по роли
+              _buildUsersList(usersAsync, 2), // role_id для продавцов
+              _buildUsersList(usersAsync, 4), // role_id для партнеров
             ],
           ),
         ),
@@ -117,11 +121,12 @@ class _UsersTabState extends ConsumerState<UsersTab>
         if (roleId != null) {
           filtered = users.where((user) => user.roleId == roleId).toList();
         } else if (isGuide) {
-          // Для гидов нужно проверить назначения - пока показываем всех с ролью, которая может быть гидом
-          // В будущем можно добавить проверку через API
+          // Для экскурсоводов фильтруем по названию роли
           filtered = users.where((user) {
             final roleName = user.roleName.toLowerCase();
-            return roleName.contains('гид') || roleName.contains('guide');
+            return roleName.contains('экскурсовод') ||
+                roleName.contains('гид') ||
+                roleName.contains('guide');
           }).toList();
         }
 
@@ -477,6 +482,8 @@ class _CreateUserDialogState extends ConsumerState<_CreateUserDialog> {
       if (!mounted) {
         return;
       }
+      // Обновляем список пользователей
+      ref.invalidate(allUsersFutureProvider);
       Navigator.of(context).pop(created);
     } on ApiException catch (error) {
       setState(() {

@@ -11,7 +11,7 @@ class ScheduleDay {
 
   factory ScheduleDay.fromJson(Map<String, dynamic> json) {
     return ScheduleDay(
-      dayNumber: json['day_number'] as int,
+      dayNumber: (json['day_number'] as num?)?.toInt() ?? 0,
       dayName: json['day_name'] as String,
       time: json['time'] as String,
     );
@@ -34,7 +34,7 @@ class ScheduleTemplate {
   factory ScheduleTemplate.fromJson(Map<String, dynamic> json) {
     final scheduleJson = json['schedule'] as List<dynamic>? ?? [];
     return ScheduleTemplate(
-      id: json['id'] as int,
+      id: (json['id'] as num?)?.toInt() ?? 0,
       title: json['title'] as String,
       description: json['description'] as String,
       schedule: scheduleJson
@@ -43,5 +43,3 @@ class ScheduleTemplate {
     );
   }
 }
-
-

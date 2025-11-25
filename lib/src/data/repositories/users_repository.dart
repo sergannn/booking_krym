@@ -11,12 +11,15 @@ class UsersRepository {
 
   Future<List<UserSummary>> fetchUsers() async {
     try {
-      final response =
-          await _client.getJson('/api/users', authenticated: true);
+      // Запрашиваем больше пользователей за раз, чтобы получить всех
+      final response = await _client.getJson(
+        '/api/users',
+        query: {'per_page': 100},
+        authenticated: true,
+      );
       final items = response['users'] as List<dynamic>? ?? const [];
       return items
-          .map((item) =>
-              UserSummary.fromJson(item as Map<String, dynamic>))
+          .map((item) => UserSummary.fromJson(item as Map<String, dynamic>))
           .toList();
     } on ApiException {
       rethrow;

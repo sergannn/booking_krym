@@ -77,7 +77,7 @@ class ProfitItem {
 
   factory ProfitItem.fromJson(Map<String, dynamic> json) {
     return ProfitItem(
-      bookingId: json['booking_id'] as int,
+      bookingId: (json['booking_id'] as num?)?.toInt() ?? 0,
       excursion: ProfitExcursion.fromJson(
         json['excursion'] as Map<String, dynamic>,
       ),
@@ -113,7 +113,7 @@ class ProfitExcursion {
         ? DateTime.parse(dateTimeStr)
         : DateTime.now();
     return ProfitExcursion(
-      id: json['id'] as int,
+      id: (json['id'] as num?)?.toInt() ?? 0,
       title: json['title'] as String? ?? '',
       dateTime: dateTime,
     );

@@ -103,18 +103,26 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       onFieldSubmitted: (_) => _submit(),
                     ),
                     const SizedBox(height: 20),
-                    SizedBox(
-                      width: double.infinity,
-                      child: FilledButton(
-                        onPressed: _submitting ? null : _submit,
-                        child: _submitting
-                            ? const SizedBox(
-                                height: 20,
-                                width: 20,
-                                child:
-                                    CircularProgressIndicator(strokeWidth: 2),
-                              )
-                            : const Text('Войти'),
+                    GestureDetector(
+                      onDoubleTap: () {
+                        setState(() {
+                          _emailController.text = 'admin@excursion.ru';
+                          _passwordController.text = 'password';
+                        });
+                      },
+                      child: SizedBox(
+                        width: double.infinity,
+                        child: FilledButton(
+                          onPressed: _submitting ? null : _submit,
+                          child: _submitting
+                              ? const SizedBox(
+                                  height: 20,
+                                  width: 20,
+                                  child:
+                                      CircularProgressIndicator(strokeWidth: 2),
+                                )
+                              : const Text('Войти'),
+                        ),
                       ),
                     ),
                   ],

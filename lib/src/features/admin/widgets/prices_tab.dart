@@ -100,7 +100,7 @@ class PricesTab extends ConsumerWidget {
                                                 const TextStyle(fontSize: 13),
                                           ),
                                           Text(
-                                            'Со входом: ${priceWith.toStringAsFixed(2)} ₽',
+                                            'Входной билет: ${priceWith.toStringAsFixed(2)} ₽',
                                             style:
                                                 const TextStyle(fontSize: 13),
                                           ),

@@ -36,7 +36,7 @@ class WalletUser {
 
   factory WalletUser.fromJson(Map<String, dynamic> json) {
     return WalletUser(
-      id: json['id'] as int,
+      id: (json['id'] as num?)?.toInt() ?? 0,
       name: json['name'] as String? ?? '',
       email: json['email'] as String? ?? '',
     );
@@ -60,7 +60,7 @@ class WalletTransactionItem {
 
   factory WalletTransactionItem.fromJson(Map<String, dynamic> json) {
     return WalletTransactionItem(
-      id: json['id'] as int,
+      id: (json['id'] as num?)?.toInt() ?? 0,
       amount: double.tryParse(json['amount'].toString()) ?? 0,
       description: json['description'] as String? ?? '',
       booking: json['booking'] == null
@@ -89,8 +89,7 @@ class SalesInfo {
       user: WalletUser.fromJson(json['user'] as Map<String, dynamic>),
       totalSales: double.tryParse(json['total_sales'].toString()) ?? 0,
       bookings: (json['bookings'] as List<dynamic>? ?? const [])
-          .map((item) =>
-              BookingItem.fromJson(item as Map<String, dynamic>))
+          .map((item) => BookingItem.fromJson(item as Map<String, dynamic>))
           .toList(),
     );
   }

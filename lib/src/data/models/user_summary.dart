@@ -29,15 +29,16 @@ class UserSummary {
       }
     }
 
-    final roleId =
-        json['role_id'] as int? ?? json['moonshine_user_role_id'] as int? ?? 0;
+    final roleId = (json['role_id'] as num?)?.toInt() ??
+        (json['moonshine_user_role_id'] as num?)?.toInt() ??
+        0;
     return UserSummary(
-      id: json['id'] as int,
-      name: json['name'] as String,
-      email: json['email'] as String,
+      id: (json['id'] as num?)?.toInt() ?? 0,
+      name: json['name'] as String? ?? '',
+      email: json['email'] as String? ?? '',
       roleName: roleName,
       roleId: roleId,
-      balance: double.tryParse(json['balance'].toString()) ?? 0,
+      balance: double.tryParse(json['balance']?.toString() ?? '0') ?? 0,
       password: json['password'] as String?,
     );
   }

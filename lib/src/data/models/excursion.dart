@@ -51,8 +51,8 @@ class Excursion {
         dateTime.millisecond,
         dateTime.microsecond);
     return Excursion(
-      id: json['id'] as int,
-      title: json['title'] as String,
+      id: (json['id'] as num?)?.toInt() ?? 0,
+      title: json['title'] as String? ?? '',
       description: json['description'] as String? ?? '',
       date: date,
       time: json['time'] as String? ?? '',
@@ -60,7 +60,7 @@ class Excursion {
       price: json['price'] != null
           ? double.tryParse(json['price'].toString())
           : null,
-      maxSeats: json['max_seats'] as int,
+      maxSeats: (json['max_seats'] as num?)?.toInt() ?? 0,
       bookedSeatsCount: json['booked_seats_count'] as int? ?? 0,
       availableSeatsCount: json['available_seats_count'] as int? ?? 0,
       assignedStaff: staffJson == null
@@ -196,7 +196,7 @@ class ExcursionStaff {
 
   factory ExcursionStaff.fromJson(Map<String, dynamic> json) {
     return ExcursionStaff(
-      id: json['id'] as int,
+      id: (json['id'] as num?)?.toInt() ?? 0,
       name: json['name'] as String? ?? '',
       email: json['email'] as String? ?? '',
       roleInExcursion: json['role_in_excursion'] as String? ?? '',
@@ -220,8 +220,8 @@ class StaffPrice {
   factory StaffPrice.fromJson(Map<String, dynamic> json) {
     return StaffPrice(
       staffType: json['staff_type'] as String,
-      minPassengers: json['min_passengers'] as int,
-      maxPassengers: json['max_passengers'] as int?,
+      minPassengers: (json['min_passengers'] as num?)?.toInt() ?? 0,
+      maxPassengers: (json['max_passengers'] as num?)?.toInt(),
       price: double.tryParse(json['price'].toString()) ?? 0.0,
     );
   }

@@ -188,32 +188,32 @@ class _BookingDialogState extends State<BookingDialog>
               ),
 
               // Итоговая сумма
-              if (hasSeats) ...[
-                const SizedBox(height: 16),
-                Builder(
-                  builder: (context) {
-                    double total = 0;
-                    for (final seatNum in _seatNumbers) {
-                      final data = _seatData[seatNum]!;
-                      final tariff =
-                          widget.tariffs[data.passengerType.apiValue];
-                      if (tariff != null) {
-                        final price = data.withEntry
-                            ? (tariff.priceWithEntry ?? tariff.price)
-                            : (tariff.priceWithoutEntry ?? tariff.price);
-                        total += price;
-                      }
-                    }
-                    return Text(
-                      'Итого: ${total.toStringAsFixed(2)} ₽',
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
-                      ),
-                    );
-                  },
-                ),
-              ],
+              // if (hasSeats) ...[
+              //   const SizedBox(height: 16),
+              //   Builder(
+              //     builder: (context) {
+              //       double total = 0;
+              //       for (final seatNum in _seatNumbers) {
+              //         final data = _seatData[seatNum]!;
+              //         final tariff =
+              //             widget.tariffs[data.passengerType.apiValue];
+              //         if (tariff != null) {
+              //           final price = data.withEntry
+              //               ? (tariff.priceWithEntry ?? tariff.price)
+              //               : (tariff.priceWithoutEntry ?? tariff.price);
+              //           total += price;
+              //         }
+              //       }
+              //       return Text(
+              //         'Итого: ${total.toStringAsFixed(2)} ₽',
+              //         style: const TextStyle(
+              //           fontWeight: FontWeight.bold,
+              //           fontSize: 16,
+              //         ),
+              //       );
+              //     },
+              //   ),
+              // ],
             ],
           ),
         ),
@@ -300,12 +300,22 @@ class _BookingDialogState extends State<BookingDialog>
 
   Widget _buildSeatTab(int seatNum) {
     final data = _seatData[seatNum]!;
+    final hasMultipleSeats = _seatNumbers.length > 1;
 
     return SingleChildScrollView(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           const SizedBox(height: 16),
+          // Кнопка "Копировать для всех мест" (только если мест больше одного)
+          if (hasMultipleSeats) ...[
+            OutlinedButton.icon(
+              icon: const Icon(Icons.copy, size: 18),
+              label: const Text('Копировать для всех мест'),
+              onPressed: () => _copyToAllSeats(seatNum),
+            ),
+            const SizedBox(height: 16),
+          ],
           TextFormField(
             controller: data.nameController,
             decoration: const InputDecoration(labelText: 'Имя пассажира'),
@@ -360,34 +370,67 @@ class _BookingDialogState extends State<BookingDialog>
               }
             },
           ),
-          const SizedBox(height: 12),
-          Builder(
-            builder: (context) {
-              final tariff = widget.tariffs[data.passengerType.apiValue];
-              if (tariff != null) {
-                final price = data.withEntry
-                    ? (tariff.priceWithEntry ?? tariff.price)
-                    : (tariff.priceWithoutEntry ?? tariff.price);
-                return Text(
-                  'Цена: ${price.toStringAsFixed(2)} ₽',
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
-                  ),
-                );
-              }
-              return const Text(
-                'Цена для выбранного типа не настроена',
-                style: TextStyle(
-                  color: Colors.red,
-                  fontWeight: FontWeight.w600,
-                ),
-              );
-            },
-          ),
+          // const SizedBox(height: 12),
+          // Builder(
+          //   builder: (context) {
+          //     final tariff = widget.tariffs[data.passengerType.apiValue];
+          //     if (tariff != null) {
+          //       final price = data.withEntry
+          //           ? (tariff.priceWithEntry ?? tariff.price)
+          //           : (tariff.priceWithoutEntry ?? tariff.price);
+          //       return Text(
+          //         'Цена: ${price.toStringAsFixed(2)} ₽',
+          //         style: const TextStyle(
+          //           fontWeight: FontWeight.bold,
+          //           fontSize: 16,
+          //         ),
+          //       );
+          //     }
+          //     return const Text(
+          //       'Цена для выбранного типа не настроена',
+          //       style: TextStyle(
+          //         color: Colors.red,
+          //         fontWeight: FontWeight.w600,
+          //       ),
+          //     );
+          //   },
+          // ),
         ],
       ),
     );
+  }
+
+  /// Копирует данные из указанного места на все остальные места
+  void _copyToAllSeats(int sourceSeatNum) {
+    final sourceData = _seatData[sourceSeatNum]!;
+
+    setState(() {
+      for (final seatNum in _seatNumbers) {
+        if (seatNum != sourceSeatNum) {
+          final targetData = _seatData[seatNum]!;
+          // Копируем имя
+          targetData.nameController.text = sourceData.nameController.text;
+          // Копируем телефон
+          targetData.phoneController.text = sourceData.phoneController.text;
+          // Копируем тип пассажира
+          targetData.passengerType = sourceData.passengerType;
+          // Копируем флаг входного билета
+          targetData.withEntry = sourceData.withEntry;
+        }
+      }
+    });
+
+    // Показываем уведомление
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Данные из места $sourceSeatNum скопированы на все остальные места',
+          ),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    }
   }
 
   /// Парсит строку с номерами мест (поддерживает запятые и диапазоны)

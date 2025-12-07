@@ -190,64 +190,56 @@ class _ExcursionTile extends ConsumerWidget {
     final isAvailable = excursion.availableSeatsCount > 0 && !excursion.isPast;
 
     return Card(
-      margin: const EdgeInsets.only(bottom: 8),
+      margin: const EdgeInsets.only(bottom: 6),
       color: isAvailable
           ? null
           : Colors.grey.shade200, // Серый фон для недоступных
       child: Padding(
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
                     '${excursion.title} — ${formatter.format(excursion.dateTime)}',
-                    style: Theme.of(context).textTheme.titleMedium,
+                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                        ),
                   ),
-                  if (excursion.description.isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 4),
-                      child: Text(
-                        excursion.description,
-                        style: Theme.of(context).textTheme.bodySmall,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 4),
                   Text(
-                    'Цена (взрослый): ${excursion.priceFor('adult').toStringAsFixed(2)} ₽',
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                  Text(
-                    'Свободно ${excursion.availableSeatsCount} из ${excursion.maxSeats}',
-                    style: Theme.of(context).textTheme.bodySmall,
+                    'Цена (взрослый): ${excursion.priceFor('adult').toStringAsFixed(2)} ₽, Мест: ${excursion.availableSeatsCount}/${excursion.maxSeats}',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          fontSize: 12,
+                        ),
                   ),
                 ],
               ),
             ),
-            const SizedBox(width: 8),
-            Column(
-              children: [
-                IconButton(
-                  icon: const Icon(Icons.event_seat),
-                  tooltip: 'Забронировать',
-                  onPressed: isAvailable ? () => _book(context, ref) : null,
-                  color: isAvailable
-                      ? Theme.of(context).colorScheme.primary
-                      : Colors.grey,
-                ),
-                IconButton(
-                  icon: const Icon(Icons.list),
-                  tooltip: 'Места',
-                  onPressed: excursion.busSeats.isEmpty
-                      ? null
-                      : () => _showSeatSheet(context, ref),
-                ),
-              ],
+            const SizedBox(width: 4),
+            IconButton(
+              icon: const Icon(Icons.event_seat, size: 20),
+              tooltip: 'Забронировать',
+              padding: const EdgeInsets.all(8),
+              constraints: const BoxConstraints(),
+              onPressed: isAvailable ? () => _book(context, ref) : null,
+              color: isAvailable
+                  ? Theme.of(context).colorScheme.primary
+                  : Colors.grey,
+            ),
+            IconButton(
+              icon: const Icon(Icons.list, size: 20),
+              tooltip: 'Места',
+              padding: const EdgeInsets.all(8),
+              constraints: const BoxConstraints(),
+              onPressed: excursion.busSeats.isEmpty
+                  ? null
+                  : () => _showSeatSheet(context, ref),
             ),
           ],
         ),

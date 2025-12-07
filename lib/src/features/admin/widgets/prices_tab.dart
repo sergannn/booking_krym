@@ -433,17 +433,20 @@ class _PriceEditDialogState extends ConsumerState<PriceEditDialog> {
       padding: const EdgeInsets.only(bottom: 12),
       child: Row(
         children: [
-          Expanded(
-            flex: 2,
+          SizedBox(
+            width: 70,
             child: DropdownButtonFormField<String>(
               value: row.staffType,
               decoration: const InputDecoration(
-                labelText: 'Тип персонала',
+                labelText: 'Тип',
                 isDense: true,
+                contentPadding:
+                    EdgeInsets.symmetric(horizontal: 8, vertical: 12),
               ),
+              style: const TextStyle(fontSize: 12),
               items: const [
-                DropdownMenuItem(value: 'driver', child: Text('Водитель')),
-                DropdownMenuItem(value: 'guide', child: Text('Экскурсовод')),
+                DropdownMenuItem(value: 'driver', child: Text('Вод')),
+                DropdownMenuItem(value: 'guide', child: Text('Экс')),
               ],
               onChanged: (value) {
                 setState(() {
@@ -452,14 +455,19 @@ class _PriceEditDialogState extends ConsumerState<PriceEditDialog> {
               },
             ),
           ),
-          const SizedBox(width: 8),
-          Expanded(
+          const SizedBox(width: 4),
+          SizedBox(
+            width: 55,
             child: TextFormField(
               controller: row.minPassengersController,
               keyboardType: TextInputType.number,
+              style: const TextStyle(fontSize: 12),
+              textAlign: TextAlign.center,
               decoration: const InputDecoration(
                 labelText: 'От',
                 isDense: true,
+                contentPadding:
+                    EdgeInsets.symmetric(horizontal: 6, vertical: 12),
               ),
               validator: (value) {
                 if (value == null || value.trim().isEmpty) {
@@ -473,14 +481,19 @@ class _PriceEditDialogState extends ConsumerState<PriceEditDialog> {
               },
             ),
           ),
-          const SizedBox(width: 8),
-          Expanded(
+          const SizedBox(width: 4),
+          SizedBox(
+            width: 55,
             child: TextFormField(
               controller: row.maxPassengersController,
               keyboardType: TextInputType.number,
+              style: const TextStyle(fontSize: 12),
+              textAlign: TextAlign.center,
               decoration: const InputDecoration(
-                labelText: 'До (необязательно)',
+                labelText: 'До',
                 isDense: true,
+                contentPadding:
+                    EdgeInsets.symmetric(horizontal: 6, vertical: 12),
               ),
               validator: (value) {
                 if (value != null && value.trim().isNotEmpty) {
@@ -498,16 +511,20 @@ class _PriceEditDialogState extends ConsumerState<PriceEditDialog> {
               },
             ),
           ),
-          const SizedBox(width: 8),
-          Expanded(
+          const SizedBox(width: 4),
+          SizedBox(
+            width: 90,
             child: TextFormField(
               controller: row.priceController,
               keyboardType:
                   const TextInputType.numberWithOptions(decimal: true),
+              style: const TextStyle(fontSize: 12),
               decoration: const InputDecoration(
                 labelText: 'Цена',
                 suffixText: '₽',
                 isDense: true,
+                contentPadding:
+                    EdgeInsets.symmetric(horizontal: 6, vertical: 12),
               ),
               validator: (value) {
                 if (value == null || value.trim().isEmpty) {
@@ -522,8 +539,11 @@ class _PriceEditDialogState extends ConsumerState<PriceEditDialog> {
               },
             ),
           ),
+          const SizedBox(width: 4),
           IconButton(
-            icon: const Icon(Icons.delete, size: 20),
+            icon: const Icon(Icons.delete, size: 18),
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(),
             onPressed: () {
               setState(() {
                 _staffPriceRows.remove(row);

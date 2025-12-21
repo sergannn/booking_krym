@@ -188,32 +188,32 @@ class _BookingDialogState extends State<BookingDialog>
               ),
 
               // Итоговая сумма
-              // if (hasSeats) ...[
-              //   const SizedBox(height: 16),
-              //   Builder(
-              //     builder: (context) {
-              //       double total = 0;
-              //       for (final seatNum in _seatNumbers) {
-              //         final data = _seatData[seatNum]!;
-              //         final tariff =
-              //             widget.tariffs[data.passengerType.apiValue];
-              //         if (tariff != null) {
-              //           final price = data.withEntry
-              //               ? (tariff.priceWithEntry ?? tariff.price)
-              //               : (tariff.priceWithoutEntry ?? tariff.price);
-              //           total += price;
-              //         }
-              //       }
-              //       return Text(
-              //         'Итого: ${total.toStringAsFixed(2)} ₽',
-              //         style: const TextStyle(
-              //           fontWeight: FontWeight.bold,
-              //           fontSize: 16,
-              //         ),
-              //       );
-              //     },
-              //   ),
-              // ],
+              if (hasSeats) ...[
+                const SizedBox(height: 16),
+                Builder(
+                  builder: (context) {
+                    double total = 0;
+                    for (final seatNum in _seatNumbers) {
+                      final data = _seatData[seatNum]!;
+                      final tariff =
+                          widget.tariffs[data.passengerType.apiValue];
+                      if (tariff != null) {
+                        final price = data.withEntry
+                            ? (tariff.priceWithEntry ?? tariff.price)
+                            : (tariff.priceWithoutEntry ?? tariff.price);
+                        total += price;
+                      }
+                    }
+                    return Text(
+                      'Итого: ${total.toStringAsFixed(2)} ₽',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
+                    );
+                  },
+                ),
+              ],
             ],
           ),
         ),
@@ -370,31 +370,31 @@ class _BookingDialogState extends State<BookingDialog>
               }
             },
           ),
-          // const SizedBox(height: 12),
-          // Builder(
-          //   builder: (context) {
-          //     final tariff = widget.tariffs[data.passengerType.apiValue];
-          //     if (tariff != null) {
-          //       final price = data.withEntry
-          //           ? (tariff.priceWithEntry ?? tariff.price)
-          //           : (tariff.priceWithoutEntry ?? tariff.price);
-          //       return Text(
-          //         'Цена: ${price.toStringAsFixed(2)} ₽',
-          //         style: const TextStyle(
-          //           fontWeight: FontWeight.bold,
-          //           fontSize: 16,
-          //         ),
-          //       );
-          //     }
-          //     return const Text(
-          //       'Цена для выбранного типа не настроена',
-          //       style: TextStyle(
-          //         color: Colors.red,
-          //         fontWeight: FontWeight.w600,
-          //       ),
-          //     );
-          //   },
-          // ),
+          const SizedBox(height: 12),
+          Builder(
+            builder: (context) {
+              final tariff = widget.tariffs[data.passengerType.apiValue];
+              if (tariff != null) {
+                final price = data.withEntry
+                    ? (tariff.priceWithEntry ?? tariff.price)
+                    : (tariff.priceWithoutEntry ?? tariff.price);
+                return Text(
+                  'Цена: ${price.toStringAsFixed(2)} ₽',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                  ),
+                );
+              }
+              return const Text(
+                'Цена для выбранного типа не настроена',
+                style: TextStyle(
+                  color: Colors.red,
+                  fontWeight: FontWeight.w600,
+                ),
+              );
+            },
+          ),
         ],
       ),
     );

@@ -29,6 +29,7 @@ class BookingExcursion {
     required this.dateTime,
     required this.price,
     this.maxSeats,
+    this.scheduleByDate = const [],
   });
 
   final int id;
@@ -38,11 +39,17 @@ class BookingExcursion {
   final DateTime dateTime;
   final double price;
   final int? maxSeats;
+  final List<ScheduleDate> scheduleByDate;
 
   factory BookingExcursion.fromJson(Map<String, dynamic> json) {
-    final dateTime = DateTime.parse(json['date_time'] as String);
-    // Создаем date в том же часовом поясе, что и dateTime
-    final date = DateTime(
+    final dateTimeStr = json['date_time'] as String?;
+    DateTime dateTime;
+    DateTime date;
+    String time = '';
+    
+    if (dateTimeStr != null && dateTimeStr.isNotEmpty) {
+      dateTime = DateTime.parse(dateTimeStr);
+      date = DateTime(
         dateTime.year,
         dateTime.month,
         dateTime.day,
@@ -51,14 +58,56 @@ class BookingExcursion {
         dateTime.second,
         dateTime.millisecond,
         dateTime.microsecond);
+      time = json['time'] as String? ?? dateTime.toString().substring(11, 16);
+    } else {
+      // Если date_time null, используем текущую дату как fallback
+      dateTime = DateTime.now();
+      date = DateTime.now();
+    }
+    
+    // Парсим schedule_by_date если есть
+    final scheduleByDateJson = json['schedule_by_date'] as List<dynamic>?;
+    final scheduleByDate = scheduleByDateJson == null
+        ? <ScheduleDate>[]
+        : scheduleByDateJson
+            .map((item) => ScheduleDate.fromJson(item as Map<String, dynamic>))
+            .toList();
+    
     return BookingExcursion(
       id: (json['id'] as num?)?.toInt() ?? 0,
       title: json['title'] as String,
       date: date,
-      time: json['time'] as String? ?? '',
+      time: time,
       dateTime: dateTime,
       price: double.tryParse(json['price']?.toString() ?? '') ?? 0,
       maxSeats: json['max_seats'] as int?,
+      scheduleByDate: scheduleByDate,
+    );
+  }
+}
+
+class ScheduleDate {
+  const ScheduleDate({
+    required this.date,
+    required this.dateTime,
+    required this.weekday,
+    required this.weekdayName,
+    required this.time,
+  });
+
+  final String date; // Y-m-d
+  final DateTime dateTime;
+  final int weekday;
+  final String weekdayName;
+  final String time;
+
+  factory ScheduleDate.fromJson(Map<String, dynamic> json) {
+    return ScheduleDate(
+      date: json['date'] as String,
+      dateTime: DateTime.parse(json['date_time'] as String),
+      weekday: (json['weekday'] as num?)?.toInt() ?? 0,
+      weekdayName: json['weekday_name'] as String? ?? '',
+      time: json['time'] as String? ?? '',
     );
   }
 }
@@ -75,6 +124,9 @@ class BookingItem {
     required this.stop,
     required this.bookedAt,
     this.bookedBy,
+    this.bookedByName,
+    this.weekday,
+    this.time,
   });
 
   final int id;
@@ -87,6 +139,9 @@ class BookingItem {
   final Stop? stop;
   final DateTime bookedAt;
   final int? bookedBy; // ID пользователя, который создал бронирование
+  final String? bookedByName; // Имя пользователя, который создал бронирование
+  final int? weekday; // 1-7: Понедельник-Воскресенье
+  final String? time; // Время в формате HH:mm
 
   factory BookingItem.fromJson(Map<String, dynamic> json) {
     BookingSeat parseSeat() {
@@ -118,6 +173,8 @@ class BookingItem {
       price: double.tryParse(json['price']?.toString() ?? '') ?? 0,
       customerName: json['customer_name'] as String? ?? '',
       customerPhone: json['customer_phone']?.toString() ?? '',
+      weekday: (json['weekday'] as num?)?.toInt(),
+      time: json['time'] as String?,
       passengerType:
           PassengerTypeX.fromJson(json['passenger_type'] as String? ?? ''),
       stop: json['stop'] == null
@@ -125,6 +182,7 @@ class BookingItem {
           : Stop.fromJson(json['stop'] as Map<String, dynamic>),
       bookedAt: parseBookedAt(),
       bookedBy: json['booked_by'] as int?,
+      bookedByName: json['booked_by_name'] as String?,
     );
   }
 }
@@ -176,7 +234,7 @@ class BookingResponse {
   }
 }
 
-enum PassengerType { adult, child, senior, disabled }
+enum PassengerType { adult, child, senior, disabled, special }
 
 extension PassengerTypeX on PassengerType {
   String get apiValue => name;
@@ -191,6 +249,8 @@ extension PassengerTypeX on PassengerType {
         return 'Пенсионер';
       case PassengerType.disabled:
         return 'Инвалид';
+      case PassengerType.special:
+        return 'Спеццена';
     }
   }
 
@@ -203,6 +263,24 @@ extension PassengerTypeX on PassengerType {
 }
 
 List<BookingGroup> groupBookingsByExcursion(List<BookingItem> items) {
-  final grouped = groupBy(items, (item) => item.excursion.id);
+  // Группируем по excursion.id И по дате экскурсии (dateTime),
+  // чтобы бронирования одной экскурсии на разные даты были в разных группах
+  final grouped = groupBy(items, (item) {
+    // Используем комбинацию excursion.id и даты (только дата, без времени) для группировки
+    final dateKey = DateTime(
+      item.excursion.dateTime.year,
+      item.excursion.dateTime.month,
+      item.excursion.dateTime.day,
+    );
+    return '${item.excursion.id}_${dateKey.millisecondsSinceEpoch}';
+  });
   return grouped.values.map(BookingGroup.fromList).toList();
+}
+
+/// Бронирования уже имеют конкретную дату - не разворачиваем их
+/// Просто возвращаем как есть, используя date_time из бронирования
+List<BookingItem> expandBookingsByDates(List<BookingItem> items) {
+  // У бронирования всегда есть конкретная дата из выбранной экскурсии
+  // Не нужно разворачивать по расписанию - просто возвращаем как есть
+  return items;
 }

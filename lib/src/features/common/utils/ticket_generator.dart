@@ -228,7 +228,7 @@ class TicketGenerator {
               pw.Divider(),
               pw.SizedBox(height: 16),
               pw.Text(
-                'Продавец: $bookedBy',
+                'Организатор экскурсии: $bookedBy',
                 style: baseTextStyle,
               ),
               pw.Text(

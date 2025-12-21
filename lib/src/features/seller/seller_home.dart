@@ -37,7 +37,7 @@ class _SellerHomePageState extends ConsumerState<SellerHomePage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('Продавец — ${widget.user.name}'),
+        title: Text('Организатор экскурсии — ${widget.user.name}'),
         actions: [
           IconButton(
             tooltip: 'Обновить',
@@ -77,11 +77,32 @@ class _SellerHomePageState extends ConsumerState<SellerHomePage> {
   }
 }
 
-class _ExcursionsTab extends ConsumerWidget {
+class _ExcursionsTab extends ConsumerStatefulWidget {
   const _ExcursionsTab();
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_ExcursionsTab> createState() => _ExcursionsTabState();
+}
+
+class _ExcursionsTabState extends ConsumerState<_ExcursionsTab> {
+  DateTime? _selectedDate;
+
+  Future<void> _selectDate(BuildContext context) async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _selectedDate ?? DateTime.now(),
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2100),
+    );
+    if (picked != null) {
+      setState(() {
+        _selectedDate = picked;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final authState = ref.watch(authControllerProvider);
     final user = authState.value;
     if (user == null) return const SizedBox.shrink();
@@ -93,37 +114,140 @@ class _ExcursionsTab extends ConsumerWidget {
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (error, _) => _ErrorMessage(message: '$error'),
       data: (items) {
-        final upcoming = items.where((excursion) => !excursion.isPast).toList();
-        if (upcoming.isEmpty) {
-          return const Center(child: Text('Нет доступных экскурсий'));
+        // Фильтруем по выбранной дате
+        final filteredItems = _selectedDate == null
+            ? items
+            : items.where((excursion) {
+                final excursionDate = DateTime(
+                  excursion.dateTime.year,
+                  excursion.dateTime.month,
+                  excursion.dateTime.day,
+                );
+                final selectedDateOnly = DateTime(
+                  _selectedDate!.year,
+                  _selectedDate!.month,
+                  _selectedDate!.day,
+                );
+                return excursionDate == selectedDateOnly;
+              }).toList();
+
+        final allItems = [...filteredItems]
+          ..sort((a, b) => a.dateTime.compareTo(b.dateTime));
+        if (allItems.isEmpty) {
+          return Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Экскурсии',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    OutlinedButton.icon(
+                      icon: const Icon(Icons.calendar_today, size: 18),
+                      label: Text(
+                        _selectedDate == null
+                            ? 'Выбрать дату'
+                            : DateFormat('dd.MM.yyyy').format(_selectedDate!),
+                      ),
+                      onPressed: () => _selectDate(context),
+                    ),
+                  ],
+                ),
+              ),
+              if (_selectedDate != null)
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: TextButton.icon(
+                    icon: const Icon(Icons.clear, size: 18),
+                    label: const Text('Сбросить фильтр'),
+                    onPressed: () {
+                      setState(() {
+                        _selectedDate = null;
+                      });
+                    },
+                  ),
+                ),
+              Expanded(
+                child: Center(
+                  child: Text(
+                    _selectedDate == null
+                        ? 'Нет экскурсий'
+                        : 'Нет экскурсий на выбранную дату',
+                  ),
+                ),
+              ),
+            ],
+          );
         }
-        upcoming.sort((a, b) => a.dateTime.compareTo(b.dateTime));
         final groups = <DateTime, List<Excursion>>{};
-        for (final excursion in upcoming) {
+        for (final excursion in allItems) {
           final key = DateTime(excursion.dateTime.year,
               excursion.dateTime.month, excursion.dateTime.day);
           groups.putIfAbsent(key, () => []).add(excursion);
         }
         final sortedDates = groups.keys.toList()..sort();
-        return RefreshIndicator(
-          onRefresh: () async {
-            ref.invalidate(excursionsFutureProvider);
-            await ref.read(excursionsFutureProvider.future);
-          },
-          child: ListView.builder(
-            padding: const EdgeInsets.all(16),
-            itemCount: sortedDates.length,
-            itemBuilder: (context, index) {
-              final date = sortedDates[index];
-              final dayItems = groups[date]!;
-              return _ExcursionDaySection(
-                date: dateFormatter.format(date),
-                excursions: dayItems,
-                formatter: timeFormatter,
-                user: user,
-              );
-            },
-          ),
+        return Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Экскурсии',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  OutlinedButton.icon(
+                    icon: const Icon(Icons.calendar_today, size: 18),
+                    label: Text(
+                      _selectedDate == null
+                          ? 'Выбрать дату'
+                          : DateFormat('dd.MM.yyyy').format(_selectedDate!),
+                    ),
+                    onPressed: () => _selectDate(context),
+                  ),
+                ],
+              ),
+            ),
+            if (_selectedDate != null)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: TextButton.icon(
+                  icon: const Icon(Icons.clear, size: 18),
+                  label: const Text('Сбросить фильтр'),
+                  onPressed: () {
+                    setState(() {
+                      _selectedDate = null;
+                    });
+                  },
+                ),
+              ),
+            Expanded(
+              child: RefreshIndicator(
+                onRefresh: () async {
+                  ref.invalidate(excursionsFutureProvider);
+                  await ref.read(excursionsFutureProvider.future);
+                },
+                child: ListView.builder(
+                  padding: const EdgeInsets.all(16),
+                  itemCount: sortedDates.length,
+                  itemBuilder: (context, index) {
+                    final date = sortedDates[index];
+                    final dayItems = groups[date]!;
+                    return _ExcursionDaySection(
+                      date: dateFormatter.format(date),
+                      excursions: dayItems,
+                      formatter: timeFormatter,
+                      user: user,
+                    );
+                  },
+                ),
+              ),
+            ),
+          ],
         );
       },
     );
@@ -205,41 +329,41 @@ class _ExcursionTile extends ConsumerWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
-                    '${excursion.title} — ${formatter.format(excursion.dateTime)}',
+                    '${excursion.title} — ${formatter.format(excursion.dateTime)} ${excursion.availableSeatsCount}/${excursion.maxSeats}',
                     style: Theme.of(context).textTheme.titleSmall?.copyWith(
                           fontSize: 14,
                           fontWeight: FontWeight.w600,
-                        ),
-                  ),
+                      ),
+                    ),
                   const SizedBox(height: 4),
-                  Text(
-                    'Цена (взрослый): ${excursion.priceFor('adult').toStringAsFixed(2)} ₽, Мест: ${excursion.availableSeatsCount}/${excursion.maxSeats}',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          fontSize: 12,
-                        ),
-                  ),
+              //    Text(
+             //       'Цена (взрослый): ${excursion.priceFor('adult').toStringAsFixed(2)} ₽, Мест: ,
+             //       style: Theme.of(context).textTheme.bodySmall?.copyWith(
+            //              fontSize: 12,
+            //      ),
+            
                 ],
               ),
             ),
             const SizedBox(width: 4),
-            IconButton(
+                IconButton(
               icon: const Icon(Icons.event_seat, size: 20),
-              tooltip: 'Забронировать',
+                  tooltip: 'Забронировать',
               padding: const EdgeInsets.all(8),
               constraints: const BoxConstraints(),
-              onPressed: isAvailable ? () => _book(context, ref) : null,
-              color: isAvailable
-                  ? Theme.of(context).colorScheme.primary
-                  : Colors.grey,
-            ),
-            IconButton(
+                  onPressed: isAvailable ? () => _book(context, ref) : null,
+                  color: isAvailable
+                      ? Theme.of(context).colorScheme.primary
+                      : Colors.grey,
+                ),
+                IconButton(
               icon: const Icon(Icons.list, size: 20),
-              tooltip: 'Места',
+                  tooltip: 'Места',
               padding: const EdgeInsets.all(8),
               constraints: const BoxConstraints(),
-              onPressed: excursion.busSeats.isEmpty
-                  ? null
-                  : () => _showSeatSheet(context, ref),
+                  onPressed: excursion.busSeats.isEmpty
+                      ? null
+                      : () => _showSeatSheet(context, ref),
             ),
           ],
         ),
@@ -269,6 +393,12 @@ class _ExcursionTile extends ConsumerWidget {
     }
 
     try {
+      // Извлекаем weekday, time и конкретную дату из dateTime экскурсии
+      // DateTime.weekday возвращает ISO weekday (1 = Monday, 7 = Sunday)
+      final weekday = excursion.dateTime.weekday; // 1-7
+      final time = DateFormat('HH:mm').format(excursion.dateTime);
+      final excursionDate = DateFormat('yyyy-MM-dd').format(excursion.dateTime);
+      
       // Используем новый формат если доступен, иначе старый
       final payload = result.seats != null && result.seats!.isNotEmpty
           ? BookSeatPayload(
@@ -277,6 +407,9 @@ class _ExcursionTile extends ConsumerWidget {
               customerName: result.customerName,
               customerPhone: result.customerPhone,
               stopId: result.stopId,
+              weekday: weekday,
+              time: time,
+              excursionDate: excursionDate,
             )
           : BookSeatPayload(
               excursionId: excursion.id,
@@ -285,6 +418,9 @@ class _ExcursionTile extends ConsumerWidget {
               customerPhone: result.customerPhone,
               passengerType: result.passengerType,
               stopId: result.stopId,
+              weekday: weekday,
+              time: time,
+              excursionDate: excursionDate,
             );
 
       final response =
@@ -305,10 +441,19 @@ class _ExcursionTile extends ConsumerWidget {
       try {
         final bookingId = response.firstBookingId;
         if (bookingId != null) {
-          // Скачиваем PDF как байты
+          // Получаем все ID бронирований из ответа
+          final allBookingIds = response.bookings
+              ?.map((b) => b['id'] as int?)
+              .whereType<int>()
+              .toList();
+          
+          // Скачиваем PDF как байты, передавая все ID бронирований
           final pdfBytes = await ref
               .read(bookingsRepositoryProvider)
-              .downloadTicketPdf(bookingId);
+              .downloadTicketPdf(
+                bookingId,
+                bookingIds: allBookingIds,
+              );
           // Сохраняем/отправляем PDF (на мобильных) или скачиваем (на веб)
           await PdfDownloader.saveAndSharePdf(
             pdfBytes: pdfBytes,
@@ -1050,7 +1195,7 @@ class _PricesTab extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return const PricesTab();
+    return const PricesTab(canEdit: false);
   }
 }
 

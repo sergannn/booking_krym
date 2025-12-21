@@ -39,17 +39,29 @@ class Excursion {
     final seatsJson = json['bus_seats'] as List<dynamic>?;
     final staffJson = json['assigned_staff'] as List<dynamic>?;
     final pricesJson = json['prices'] as List<dynamic>?;
-    final dateTime = DateTime.parse(json['date_time'] as String);
-    // Создаем date в том же часовом поясе, что и dateTime
-    final date = DateTime(
-        dateTime.year,
-        dateTime.month,
-        dateTime.day,
-        dateTime.hour,
-        dateTime.minute,
-        dateTime.second,
-        dateTime.millisecond,
-        dateTime.microsecond);
+    
+    // date_time теперь может быть null (экскурсии стали шаблонами)
+    final dateTimeStr = json['date_time'] as String?;
+    DateTime? dateTime;
+    DateTime? date;
+    if (dateTimeStr != null && dateTimeStr.isNotEmpty) {
+      dateTime = DateTime.parse(dateTimeStr);
+      // Создаем date в том же часовом поясе, что и dateTime
+      date = DateTime(
+          dateTime.year,
+          dateTime.month,
+          dateTime.day,
+          dateTime.hour,
+          dateTime.minute,
+          dateTime.second,
+          dateTime.millisecond,
+          dateTime.microsecond);
+    } else {
+      // Если date_time null, используем текущую дату как fallback
+      dateTime = DateTime.now();
+      date = DateTime.now();
+    }
+    
     return Excursion(
       id: (json['id'] as num?)?.toInt() ?? 0,
       title: json['title'] as String? ?? '',
@@ -111,6 +123,7 @@ class Excursion {
         'child': defaultTariff,
         'senior': defaultTariff,
         'disabled': defaultTariff,
+        'special': defaultTariff,
       };
     }
 
@@ -119,6 +132,7 @@ class Excursion {
       'child': defaultTariff,
       'senior': defaultTariff,
       'disabled': defaultTariff,
+      'special': defaultTariff,
     };
 
     for (final item in pricesJson) {
@@ -187,12 +201,16 @@ class ExcursionStaff {
     required this.name,
     required this.email,
     required this.roleInExcursion,
+    this.excursionDate,
+    this.time,
   });
 
   final int id;
   final String name;
   final String email;
   final String roleInExcursion; // driver | guide
+  final String? excursionDate; // YYYY-MM-DD или null (на все даты)
+  final String? time; // HH:MM или null (на все времена)
 
   factory ExcursionStaff.fromJson(Map<String, dynamic> json) {
     return ExcursionStaff(
@@ -200,6 +218,8 @@ class ExcursionStaff {
       name: json['name'] as String? ?? '',
       email: json['email'] as String? ?? '',
       roleInExcursion: json['role_in_excursion'] as String? ?? '',
+      excursionDate: json['excursion_date'] as String?,
+      time: json['time'] as String?,
     );
   }
 }

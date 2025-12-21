@@ -5,13 +5,16 @@ import '../../../data/models/excursion.dart';
 import '../../../data/providers.dart';
 
 class PricesTab extends ConsumerWidget {
-  const PricesTab({super.key});
+  const PricesTab({super.key, this.canEdit = true});
+
+  final bool canEdit;
 
   static const _typeLabels = <String, String>{
     'adult': 'Взрослый',
     'child': 'Детский',
     'senior': 'Пенсионер',
     'disabled': 'Инвалид',
+    'special': 'Спеццена',
   };
 
   @override
@@ -112,8 +115,8 @@ class PricesTab extends ConsumerWidget {
                               );
                             },
                           ),
-                          // Цены для персонала
-                          if (excursion.staffPrices.isNotEmpty) ...[
+                          // Цены для персонала (только для админов)
+                          if (canEdit && excursion.staffPrices.isNotEmpty) ...[
                             const SizedBox(height: 16),
                             const Divider(),
                             const Text(
@@ -155,35 +158,37 @@ class PricesTab extends ConsumerWidget {
                               );
                             }),
                           ],
-                          const SizedBox(height: 12),
-                          Align(
-                            alignment: Alignment.centerRight,
-                            child: OutlinedButton.icon(
-                              icon: const Icon(Icons.edit),
-                              label: const Text('Изменить цены'),
-                              onPressed: () async {
-                                final updated = await showDialog<bool>(
-                                  context: context,
-                                  builder: (dialogContext) => PriceEditDialog(
-                                    excursion: excursion,
-                                  ),
-                                );
+                          if (canEdit) ...[
+                            const SizedBox(height: 12),
+                            Align(
+                              alignment: Alignment.centerRight,
+                              child: OutlinedButton.icon(
+                                icon: const Icon(Icons.edit),
+                                label: const Text('Изменить цены'),
+                                onPressed: () async {
+                                  final updated = await showDialog<bool>(
+                                    context: context,
+                                    builder: (dialogContext) => PriceEditDialog(
+                                      excursion: excursion,
+                                    ),
+                                  );
 
-                                if (updated == true) {
-                                  ref.invalidate(excursionsFutureProvider);
-                                  if (context.mounted) {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(
-                                        content: Text(
-                                          'Цены для «${excursion.title}» обновлены',
+                                  if (updated == true) {
+                                    ref.invalidate(excursionsFutureProvider);
+                                    if (context.mounted) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(
+                                          content: Text(
+                                            'Цены для «${excursion.title}» обновлены',
+                                          ),
                                         ),
-                                      ),
-                                    );
+                                      );
+                                    }
                                   }
-                                }
-                              },
+                                },
+                              ),
                             ),
-                          ),
+                          ],
                         ],
                       ),
                     ),
@@ -219,12 +224,13 @@ class _PriceEditDialogState extends ConsumerState<PriceEditDialog> {
   bool _isSubmitting = false;
   String? _errorMessage;
 
-  static const _typeOrder = ['adult', 'child', 'senior', 'disabled'];
+  static const _typeOrder = ['adult', 'child', 'senior', 'disabled', 'special'];
   static const _labels = <String, String>{
     'adult': 'Взрослый',
     'child': 'Детский',
     'senior': 'Пенсионер',
     'disabled': 'Инвалид',
+    'special': 'Спеццена',
   };
 
   @override

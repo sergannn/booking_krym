@@ -7,9 +7,23 @@ class ExcursionsRepository {
 
   final ApiClient _client;
 
-  Future<List<Excursion>> fetchExcursions() async {
-    final response =
-        await _client.getJson('/api/excursions', authenticated: true);
+  Future<List<Excursion>> fetchExcursions({
+    bool includePast = false,
+    String? status, // upcoming | past | all
+  }) async {
+    final query = <String, dynamic>{};
+    if (includePast) {
+      query['include_past'] = true;
+    }
+    if (status != null && status.isNotEmpty) {
+      query['status'] = status;
+    }
+
+    final response = await _client.getJson(
+      '/api/excursions',
+      authenticated: true,
+      query: query.isEmpty ? null : query,
+    );
     final data = response['data'] as List<dynamic>?;
     if (data == null) {
       return const [];

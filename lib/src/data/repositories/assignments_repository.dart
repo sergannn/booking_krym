@@ -61,12 +61,16 @@ class AssignmentsRepository {
   Future<void> assignStaff({
     required int excursionId,
     required List<Map<String, dynamic>> assignments,
+    String? excursionDate,
+    String? time,
   }) async {
     await _client.postJson(
       '/api/excursions/$excursionId/assign',
       authenticated: true,
       body: {
         'assignments': assignments,
+        if (excursionDate != null) 'excursion_date': excursionDate,
+        if (time != null) 'time': time,
       },
     );
   }

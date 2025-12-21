@@ -36,6 +36,10 @@ class BookSeatPayload {
     required this.customerName,
     required this.customerPhone,
     required this.stopId,
+    // Дата и время бронирования
+    this.weekday,
+    this.time,
+    this.excursionDate,
     // Новый формат: массив мест с типами пассажиров
     this.seats,
     // Старый формат (для обратной совместимости)
@@ -53,6 +57,9 @@ class BookSeatPayload {
   final String customerName;
   final String customerPhone;
   final int stopId;
+  final int? weekday; // 1-7: Понедельник-Воскресенье
+  final String? time; // Время в формате HH:mm
+  final String? excursionDate; // Конкретная дата экскурсии (YYYY-MM-DD)
 
   // Новый формат: массив мест с типами пассажиров
   final List<SeatBooking>? seats;
@@ -68,6 +75,17 @@ class BookSeatPayload {
       'customer_phone': customerPhone,
       'stop_id': stopId,
     };
+
+    // Добавляем дату и время, если указаны
+    if (weekday != null) {
+      json['weekday'] = weekday;
+    }
+    if (time != null) {
+      json['time'] = time;
+    }
+    if (excursionDate != null) {
+      json['excursion_date'] = excursionDate;
+    }
 
     // Используем новый формат, если доступен
     if (seats != null && seats!.isNotEmpty) {
@@ -97,6 +115,19 @@ class BookingsRepository {
         .map((item) => BookingItem.fromJson(item as Map<String, dynamic>))
         .toList();
     return groupBookingsByExcursion(bookingItems);
+  }
+
+  /// Получить бронирования для водителя/экскурсовода
+  /// Возвращает бронирования для экскурсий, на которые назначен пользователь
+  Future<List<BookingItem>> fetchDriverBookings() async {
+    final response = await _client.getJson(
+      '/api/bookings/driver',
+      authenticated: true,
+    );
+    final items = response['bookings'] as List<dynamic>? ?? const [];
+    return items
+        .map((item) => BookingItem.fromJson(item as Map<String, dynamic>))
+        .toList();
   }
 
   Future<BookingResponse> bookSeats(BookSeatPayload payload) async {
@@ -134,9 +165,26 @@ class BookingsRepository {
   }
 
   /// Скачивает PDF билет как байты (для сохранения/отправки на мобильных)
-  Future<Uint8List> downloadTicketPdf(int bookingId) async {
+  /// Если передан список ID, использует их для генерации PDF со всеми местами
+  Future<Uint8List> downloadTicketPdf(int bookingId, {List<int>? bookingIds}) async {
+    String path = '/api/bookings/$bookingId/ticket-pdf';
+    
+    // Если передан список ID, передаем их как query параметры
+    Map<String, dynamic>? queryParams;
+    if (bookingIds != null && bookingIds.isNotEmpty) {
+      // Для Laravel массивы в query параметрах передаются как ids[]=1&ids[]=2
+      // Но http пакет требует специальной обработки для массивов
+      queryParams = {
+        'ids': bookingIds, // Передаем массив напрямую
+      };
+      print('PDF download: path=$path, bookingIds=$bookingIds');
+    } else {
+      print('PDF download: no bookingIds provided, using single booking $bookingId');
+    }
+    
     final response = await _client.get(
-      '/api/bookings/$bookingId/ticket-pdf',
+      path,
+      query: queryParams,
       authenticated: true,
       headers: {
         'Accept': 'application/pdf',

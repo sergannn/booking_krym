@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 
 import '../../../data/models/excursion.dart';
 import '../../../data/models/user_summary.dart';
@@ -9,9 +10,13 @@ class AssignStaffSheet extends ConsumerStatefulWidget {
   const AssignStaffSheet({
     super.key,
     required this.excursion,
+    this.excursionDate,
+    this.time,
   });
 
   final Excursion excursion;
+  final String? excursionDate; // YYYY-MM-DD
+  final String? time; // HH:MM
 
   @override
   ConsumerState<AssignStaffSheet> createState() => _AssignStaffSheetState();
@@ -25,11 +30,23 @@ class _AssignStaffSheetState extends ConsumerState<AssignStaffSheet> {
   @override
   void initState() {
     super.initState();
+    // Фильтруем назначенный персонал по дате/времени
+    final targetDate = widget.excursionDate ?? DateFormat('yyyy-MM-dd').format(widget.excursion.dateTime);
+    final targetTime = widget.time ?? DateFormat('HH:mm').format(widget.excursion.dateTime);
+    
     for (final staff in widget.excursion.assignedStaff) {
-      if (staff.roleInExcursion == 'driver') {
-        _selectedDrivers.add(staff.id);
-      } else if (staff.roleInExcursion == 'guide') {
-        _selectedGuides.add(staff.id);
+      // Показываем только назначения на эту дату/время или без даты (на все)
+      final staffDate = staff.excursionDate;
+      final staffTime = staff.time;
+      final matchesDate = staffDate == null || staffDate == targetDate;
+      final matchesTime = staffTime == null || staffTime == targetTime;
+      
+      if (matchesDate && matchesTime) {
+        if (staff.roleInExcursion == 'driver') {
+          _selectedDrivers.add(staff.id);
+        } else if (staff.roleInExcursion == 'guide') {
+          _selectedGuides.add(staff.id);
+        }
       }
     }
   }
@@ -147,6 +164,9 @@ class _AssignStaffSheetState extends ConsumerState<AssignStaffSheet> {
     final messenger = ScaffoldMessenger.of(context);
     try {
       final repository = ref.read(assignmentsRepositoryProvider);
+      final targetDate = widget.excursionDate ?? DateFormat('yyyy-MM-dd').format(widget.excursion.dateTime);
+      final targetTime = widget.time ?? DateFormat('HH:mm').format(widget.excursion.dateTime);
+      
       await repository.assignStaff(
         excursionId: widget.excursion.id,
         assignments: [
@@ -157,6 +177,8 @@ class _AssignStaffSheetState extends ConsumerState<AssignStaffSheet> {
             (id) => {'user_id': id, 'role_in_excursion': 'guide'},
           ),
         ],
+        excursionDate: targetDate,
+        time: targetTime,
       );
       if (!mounted) {
         return;

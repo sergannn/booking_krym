@@ -1,8 +1,10 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/api/api_client.dart';
+import '../features/auth/auth_controller.dart';
 import 'models/booking.dart';
 import 'models/excursion.dart';
+import 'models/bus_seat.dart';
 import 'models/stop.dart';
 import 'models/user_role_info.dart';
 import 'models/user_summary.dart';
@@ -63,6 +65,13 @@ final scheduleRepositoryProvider = Provider<ScheduleRepository>((ref) {
 });
 
 final excursionsFutureProvider = FutureProvider<List<Excursion>>((ref) {
+  final repository = ref.watch(excursionsRepositoryProvider);
+  return repository.fetchExcursions();
+});
+
+/// Экскурсии для персонала — использует API /api/excursions
+/// который уже фильтрует по назначениям с учётом даты
+final staffExcursionsFutureProvider = FutureProvider.family<List<Excursion>, int>((ref, userId) async {
   final repository = ref.watch(excursionsRepositoryProvider);
   return repository.fetchExcursions();
 });

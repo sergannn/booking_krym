@@ -33,11 +33,33 @@ class ApiClient {
   Uri _buildUri(String path, [Map<String, dynamic>? query]) {
     final uri = Uri.parse(_baseUrl);
     final normalizedPath = path.startsWith('/') ? path.substring(1) : path;
+    final fullPath = uri.path.endsWith('/')
+        ? '${uri.path}$normalizedPath'
+        : '${uri.path}/$normalizedPath';
+    
+    // Обрабатываем query параметры, включая массивы
+    if (query == null || query.isEmpty) {
+      return uri.replace(path: fullPath);
+    }
+    
+    // Строим query строку вручную для поддержки массивов
+    final queryParts = <String>[];
+    query.forEach((key, value) {
+      if (value is List) {
+        // Для массивов создаем несколько параметров с ключом key[]
+        // Это будет обработано как ids[]=1&ids[]=2 в URL
+        for (var item in value) {
+          queryParts.add('${Uri.encodeComponent(key)}[]=${Uri.encodeComponent(item.toString())}');
+        }
+      } else {
+        queryParts.add('${Uri.encodeComponent(key)}=${Uri.encodeComponent(value.toString())}');
+      }
+    });
+    
+    final queryString = queryParts.join('&');
     return uri.replace(
-      path: uri.path.endsWith('/')
-          ? '${uri.path}$normalizedPath'
-          : '${uri.path}/$normalizedPath',
-      queryParameters: query?.map((key, value) => MapEntry(key, '$value')),
+      path: fullPath,
+      query: queryString.isEmpty ? null : queryString,
     );
   }
 

@@ -16,6 +16,13 @@ import '../common/widgets/cancellation_reason_dialog.dart';
 import 'widgets/users_tab.dart';
 import 'widgets/assign_staff_sheet.dart';
 import 'widgets/prices_tab.dart';
+import 'widgets/seat_permissions_tab.dart';
+import 'widgets/seat_access_requests_tab.dart';
+
+enum StaffIndicatorMode { combined, split }
+
+final staffIndicatorModeProvider =
+    StateProvider<StaffIndicatorMode>((ref) => StaffIndicatorMode.combined);
 
 class AdminHomePage extends StatelessWidget {
   const AdminHomePage({super.key, required this.user});
@@ -88,6 +95,8 @@ class _AdminDrawer extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final staffIndicatorMode = ref.watch(staffIndicatorModeProvider);
+
     return Drawer(
       child: ListView(
         padding: EdgeInsets.zero,
@@ -139,6 +148,43 @@ class _AdminDrawer extends ConsumerWidget {
             onTap: () {
               Navigator.of(context).pop();
               _showPage(context, const PricesTab());
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.lock),
+            title: const Text('Разрешения на места 1-2'),
+            onTap: () {
+              Navigator.of(context).pop();
+              _showPage(context, const SeatPermissionsTab());
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.request_quote),
+            title: const Text('Запросы доступа'),
+            onTap: () {
+              Navigator.of(context).pop();
+              _showPage(context, const SeatAccessRequestsTab());
+            },
+          ),
+          const Divider(),
+          ListTile(
+            dense: true,
+            title: Text(
+              'Настройки',
+              style: Theme.of(context)
+                  .textTheme
+                  .titleSmall
+                  ?.copyWith(fontWeight: FontWeight.w600),
+            ),
+          ),
+          SwitchListTile(
+            secondary: const Icon(Icons.people_alt_outlined),
+            title: const Text('Отдельные иконки водителей/гидов'),
+            subtitle: const Text('Показывать два индикатора вместо общей суммы'),
+            value: staffIndicatorMode == StaffIndicatorMode.split,
+            onChanged: (value) {
+              ref.read(staffIndicatorModeProvider.notifier).state =
+                  value ? StaffIndicatorMode.split : StaffIndicatorMode.combined;
             },
           ),
           const Divider(),
@@ -1233,7 +1279,7 @@ class _AdminExcursionCard extends ConsumerWidget {
                           spacing: 6,
                           runSpacing: 6,
                           alignment: WrapAlignment.end,
-                          children: _buildStaffIndicators(context),
+                          children: _buildStaffIndicators(context, ref),
                         ),
                     ],
                   ),
@@ -1271,52 +1317,126 @@ class _AdminExcursionCard extends ConsumerWidget {
     );
   }
 
-  List<Widget> _buildStaffIndicators(BuildContext context) {
+  List<Widget> _buildStaffIndicators(BuildContext context, WidgetRef ref) {
     final staff = _filteredStaff;
     if (staff.isEmpty) return [];
 
-    final totalCount = staff.length;
+    final mode = ref.watch(staffIndicatorModeProvider);
+    final drivers =
+        staff.where((member) => member.roleInExcursion == 'driver').toList();
+    final guides =
+        staff.where((member) => member.roleInExcursion == 'guide').toList();
+    final others = staff
+        .where((member) =>
+            member.roleInExcursion != 'driver' &&
+            member.roleInExcursion != 'guide')
+        .toList();
 
-    return [
-      Tooltip(
-        message: 'Назначено: $totalCount',
-        child: InkWell(
-          onTap: () => _showAllStaffDialog(context, staff),
-          borderRadius: BorderRadius.circular(12),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            decoration: BoxDecoration(
-              color: Colors.blue.shade50,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.blue.shade100),
+    if (mode == StaffIndicatorMode.combined) {
+      final totalCount = staff.length;
+      return [
+        _buildStaffChip(
+          context: context,
+          staff: staff,
+          tooltip: 'Назначено: $totalCount',
+          icon: Icons.people,
+          color: Colors.blue,
+          countLabel: '$totalCount',
+        ),
+      ];
+    }
+
+    final chips = <Widget>[
+      if (drivers.isNotEmpty)
+        _buildStaffChip(
+          context: context,
+          staff: drivers,
+          tooltip: 'Водители: ${drivers.length}',
+          icon: Icons.directions_bus,
+          color: Colors.indigo,
+          countLabel: '${drivers.length}',
+        ),
+      if (guides.isNotEmpty)
+        _buildStaffChip(
+          context: context,
+          staff: guides,
+          tooltip: 'Экскурсоводы: ${guides.length}',
+          icon: Icons.record_voice_over,
+          color: Colors.teal,
+          countLabel: '${guides.length}',
+        ),
+      if (others.isNotEmpty)
+        _buildStaffChip(
+          context: context,
+          staff: others,
+          tooltip: 'Другой персонал: ${others.length}',
+          icon: Icons.people_outline,
+          color: Colors.blueGrey,
+          countLabel: '${others.length}',
+        ),
+    ];
+
+    // На случай необычных ролей — хотя бы общий индикатор
+    return chips.isNotEmpty
+        ? chips
+        : [
+            _buildStaffChip(
+              context: context,
+              staff: staff,
+              tooltip: 'Назначено: ${staff.length}',
+              icon: Icons.people,
+              color: Colors.blue,
+              countLabel: '${staff.length}',
             ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(Icons.people, size: 16, color: Colors.blueGrey.shade800),
-                const SizedBox(width: 6),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: Colors.blue.shade600,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(
-                    '$totalCount',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold,
-                    ),
+          ];
+  }
+
+  Widget _buildStaffChip({
+    required BuildContext context,
+    required List<ExcursionStaff> staff,
+    required String tooltip,
+    required IconData icon,
+    required Color color,
+    required String countLabel,
+  }) {
+    return Tooltip(
+      message: tooltip,
+      child: InkWell(
+        onTap: () => _showAllStaffDialog(context, staff),
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.08),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: color.withOpacity(0.25)),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 16, color: color),
+              const SizedBox(width: 6),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: color,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  countLabel,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
                   ),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),
-    ];
+    );
   }
 
   void _showAllStaffDialog(BuildContext context, List<ExcursionStaff> staff) {

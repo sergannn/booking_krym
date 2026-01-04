@@ -7,6 +7,8 @@ import '../../data/models/excursion.dart';
 import '../../data/models/booking.dart';
 import '../../data/repositories/bookings_repository.dart';
 import '../seller/widgets/booking_dialog.dart';
+import '../seller/widgets/seat_access_request_dialog.dart';
+import '../../data/repositories/seat_permission_repository.dart';
 import '../../data/providers.dart';
 import '../auth/auth_controller.dart';
 import '../common/utils/pdf_downloader.dart';
@@ -474,6 +476,36 @@ class _ExcursionTile extends ConsumerWidget {
 
   Future<void> _showSeatSheet(BuildContext context, WidgetRef ref) async {
     final selectedSeats = <int>{};
+    
+    // Загружаем разрешения для этой экскурсии и даты
+    Map<String, bool>? permissions;
+    final isAdmin = user.roleId == 1 || user.isSuperUser;
+    if (!isAdmin) {
+      try {
+        final client = ref.read(apiClientProvider);
+        final permissionRepo = SeatPermissionRepository(client);
+        // Используем дату из excursion.dateTime (для шаблонных экскурсий это дата из schedule_by_date)
+        final excursionDate = DateFormat('yyyy-MM-dd').format(excursion.dateTime);
+        print('=== PERMISSION CHECK ===');
+        print('Excursion ID: ${excursion.id}');
+        print('Excursion Title: ${excursion.title}');
+        print('Excursion dateTime: ${excursion.dateTime}');
+        print('Formatted date: $excursionDate');
+        print('User roleId: ${user.roleId}, isSuperUser: ${user.isSuperUser}');
+        permissions = await permissionRepo.checkPermissions(
+          excursionId: excursion.id,
+          excursionDate: excursionDate,
+        );
+        print('API Response: ${permissions.toString()}');
+        print('has_permission_for_seat_1: ${permissions['has_permission_for_seat_1']}');
+        print('has_permission_for_seat_2: ${permissions['has_permission_for_seat_2']}');
+        print('=======================');
+      } catch (e) {
+        // Если не удалось загрузить разрешения, считаем что их нет
+        print('Error loading permissions: $e');
+        permissions = {'has_permission_for_seat_1': false, 'has_permission_for_seat_2': false};
+      }
+    }
 
     final result = await showDialog<List<int>>(
       context: context,
@@ -490,11 +522,26 @@ class _ExcursionTile extends ConsumerWidget {
                 children: excursion.busSeats.map((seat) {
                   final isAvailable = seat.status == 'available';
                   final isSelected = selectedSeats.contains(seat.seatNumber);
-                  // Места 1 и 2 могут продавать только администраторы (roleId == 1)
+                  // Места 1 и 2 могут продавать только администраторы или пользователи с разрешением
                   final isRestrictedSeat = [1, 2].contains(seat.seatNumber);
-                  final isAdmin = user.roleId == 1 || user.isSuperUser;
+                  // Проверяем разрешение: для админа всегда true, для продавца проверяем permissions
+                  final hasPermission = isAdmin || 
+                      (isRestrictedSeat && permissions != null && 
+                       ((seat.seatNumber == 1 && (permissions['has_permission_for_seat_1'] == true)) ||
+                        (seat.seatNumber == 2 && (permissions['has_permission_for_seat_2'] == true))));
                   final canSelect =
-                      isAvailable && (!isRestrictedSeat || isAdmin);
+                      isAvailable && (!isRestrictedSeat || hasPermission);
+                  
+                  // Отладочный вывод для мест 1 и 2
+                  if (isRestrictedSeat) {
+                    print('Seat ${seat.seatNumber}: isAvailable=$isAvailable, isAdmin=$isAdmin, hasPermission=$hasPermission, canSelect=$canSelect');
+                    if (permissions != null) {
+                      print('  Permissions: ${permissions.toString()}');
+                    } else {
+                      print('  Permissions: null');
+                    }
+                  }
+                  
                   final color = isSelected
                       ? Colors.blue.shade300
                       : canSelect
@@ -503,8 +550,9 @@ class _ExcursionTile extends ConsumerWidget {
                               ? Colors.orange.shade200
                               : Colors.red.shade200;
                   return InkWell(
-                    onTap: canSelect
+                    onTap: isAvailable && canSelect
                         ? () {
+                            // Обычная логика выбора
                             setState(() {
                               if (isSelected) {
                                 selectedSeats.remove(seat.seatNumber);
@@ -513,7 +561,24 @@ class _ExcursionTile extends ConsumerWidget {
                               }
                             });
                           }
-                        : null,
+                        : isAvailable && isRestrictedSeat && !hasPermission
+                            ? () async {
+                                // Показываем диалог запроса доступа
+                                final requestResult = await showDialog<bool>(
+                                  context: context,
+                                  builder: (dialogContext) => SeatAccessRequestDialog(
+                                    excursion: excursion,
+                                    excursionDate: excursion.dateTime,
+                                    seatNumber: seat.seatNumber,
+                                  ),
+                                );
+                                // Если запрос отправлен, закрываем диалог
+                                // Пользователь может открыть его снова, чтобы увидеть обновленные разрешения
+                                if (requestResult == true) {
+                                  Navigator.of(context).pop();
+                                }
+                              }
+                            : null,
                     child: Chip(
                       label: Text('${seat.seatNumber}'),
                       backgroundColor: color,

@@ -6,6 +6,7 @@ import 'core/api/api_client.dart';
 import 'core/app_config.dart';
 import 'core/storage/token_storage.dart';
 import 'core/services/notification_service.dart';
+import 'core/services/settings_service.dart';
 import 'features/common/app_shell.dart';
 
 class BookingAppBootstrap {
@@ -17,6 +18,7 @@ class BookingAppBootstrap {
     }
     await initializeDateFormatting('ru_RU');
     await TokenStorage.instance.init();
+    await SettingsService.instance.init();
     ApiClient.instance.configure(
       baseUrl: AppConfig.apiBaseUrl,
       tokenProvider: TokenStorage.instance,
@@ -32,11 +34,12 @@ class BookingApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const ProviderScope(
+    return ProviderScope(
       child: MaterialApp(
         debugShowCheckedModeBanner: false,
         title: 'Booking Manager',
-        home: AppShell(),
+        locale: const Locale('ru', 'RU'),
+        home: const AppShell(),
       ),
     );
   }

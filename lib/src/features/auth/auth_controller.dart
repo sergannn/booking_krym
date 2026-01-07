@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../data/providers.dart';
 import '../../data/repositories/auth_repository.dart';
 import '../../data/models/user.dart';
+import '../../core/api/api_exception.dart';
 
 final authControllerProvider =
     StateNotifierProvider<AuthController, AsyncValue<User?>>((ref) {
@@ -26,19 +27,22 @@ class AuthController extends StateNotifier<AsyncValue<User?>> {
     }
   }
 
-  Future<bool> signIn(String email, String password) async {
+  Future<String?> signIn(String email, String password) async {
     state = const AsyncValue.loading();
     try {
       final user = await _repository.signIn(email, password);
       if (user == null) {
         state = const AsyncValue.data(null);
-        return false;
+        return 'Не удалось войти. Проверьте данные.';
       }
       state = AsyncValue.data(user);
-      return true;
+      return null; // Успешный вход, ошибки нет
+    } on ApiException catch (e) {
+      state = AsyncValue.error(e, StackTrace.current);
+      return e.message; // Возвращаем сообщение об ошибке
     } catch (error, stackTrace) {
       state = AsyncValue.error(error, stackTrace);
-      return false;
+      return 'Произошла ошибка при входе.';
     }
   }
 

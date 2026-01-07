@@ -32,13 +32,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     }
     setState(() => _submitting = true);
     final controller = ref.read(authControllerProvider.notifier);
-    final success = await controller.signIn(
+    final errorMessage = await controller.signIn(
       _emailController.text,
       _passwordController.text,
     );
-    if (!success && mounted) {
+    if (errorMessage != null && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Не удалось войти. Проверьте данные.')),
+        SnackBar(content: Text(errorMessage)),
       );
     }
     if (mounted) {
@@ -104,6 +104,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     ),
                     const SizedBox(height: 20),
                     GestureDetector(
+                      onLongPress: () {    _emailController.text = 'ludaf@excursion.ru'; 
+                         _passwordController.text = 'password';
+                      },
                       onDoubleTap: () {
                         setState(() {
                           _emailController.text = 'admin@excursion.ru';

@@ -10,6 +10,7 @@ import '../../data/models/excursion.dart';
 import '../../data/providers.dart';
 import '../auth/auth_controller.dart';
 import 'assignments_controller.dart';
+import '../../core/services/internet_connection_service.dart';
 
 final assignmentsControllerProvider =
     Provider.family<AssignmentsController, User>(
@@ -73,8 +74,18 @@ class _StaffHomePageState extends ConsumerState<StaffHomePage> {
             ? 'Кабинет экскурсовода'
             : 'Расписание — ${widget.user.name}';
 
+    // Отслеживаем статус интернета
+    final internetStatusAsync = ref.watch(internetStatusProvider);
+    final hasInternet = internetStatusAsync.valueOrNull ?? true;
+    
+    // Определяем цвет фона AppBar в зависимости от статуса интернета
+    final appBarColor = hasInternet 
+        ? Theme.of(context).colorScheme.primary 
+        : Colors.red;
+
     final scaffold = Scaffold(
       appBar: AppBar(
+        backgroundColor: appBarColor,
         title: Text(appBarTitle),
         bottom: showTabs
             ? const TabBar(

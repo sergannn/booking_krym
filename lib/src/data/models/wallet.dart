@@ -71,6 +71,16 @@ class WalletTransactionItem {
           : DateTime.now(),
     );
   }
+
+  /// Очищает описание от фраз "Продажа места" и "на экскурсию"
+  String get cleanedDescription {
+    String cleaned = description;
+    // Убираем "Продажа места " в начале
+    cleaned = cleaned.replaceFirst(RegExp(r'^Продажа места\s+'), '');
+    // Убираем " на экскурсию" и все что после (включая название экскурсии в кавычках)
+    cleaned = cleaned.replaceAll(RegExp(r'\s+на экскурсию.*$'), '');
+    return cleaned.trim();
+  }
 }
 
 class SalesInfo {

@@ -16,6 +16,7 @@ class Excursion {
     required this.busSeats,
     required this.tariffs,
     this.staffPrices = const [],
+    this.isUnscheduled = false,
   });
 
   final int id;
@@ -32,6 +33,7 @@ class Excursion {
   final List<BusSeat> busSeats;
   final Map<String, ExcursionTariff> tariffs;
   final List<StaffPrice> staffPrices;
+  final bool isUnscheduled;
 
   bool get isPast => dateTime.isBefore(DateTime.now());
 
@@ -93,6 +95,7 @@ class Excursion {
             : 0.0,
       ),
       staffPrices: _parseStaffPrices(json['staff_prices'] as List<dynamic>?),
+      isUnscheduled: json['is_unscheduled'] as bool? ?? false,
     );
   }
 

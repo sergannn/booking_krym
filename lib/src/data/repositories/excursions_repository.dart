@@ -140,4 +140,25 @@ class ExcursionsRepository {
 
     return Excursion.fromJson(data);
   }
+
+  Future<Excursion> addUnscheduledDate({
+    required int excursionId,
+    required DateTime dateTime,
+  }) async {
+    final response = await _client.postJson(
+      '/api/excursions/$excursionId/unscheduled-date',
+      authenticated: true,
+      body: {
+        'date_time': dateTime.toIso8601String(),
+      },
+    );
+
+    final data = response['data'] as Map<String, dynamic>?;
+    if (data == null) {
+      throw const FormatException(
+          'Неверный ответ сервера при добавлении внеплановой даты');
+    }
+
+    return Excursion.fromJson(data);
+  }
 }

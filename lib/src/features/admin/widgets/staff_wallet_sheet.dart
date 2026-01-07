@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 
 import '../../../data/models/user_summary.dart';
 import '../../../data/models/booking.dart';
+import '../../../data/models/wallet.dart';
 import '../../../data/providers.dart';
 
 class StaffWalletSheet extends ConsumerStatefulWidget {
@@ -17,6 +18,24 @@ class StaffWalletSheet extends ConsumerStatefulWidget {
 
 class _StaffWalletSheetState extends ConsumerState<StaffWalletSheet> {
   int _sectionIndex = 0;
+  DateTime? _selectedDateFrom; // Дата начала диапазона
+  DateTime? _selectedDateTo; // Дата конца диапазона
+  final Set<DateTime> _expandedDates = {}; // Отслеживаем раскрытые даты
+
+  String _formatDateHeader(DateTime date) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final yesterday = today.subtract(const Duration(days: 1));
+    final dateOnly = DateTime(date.year, date.month, date.day);
+
+    if (dateOnly == today) {
+      return 'Сегодня';
+    } else if (dateOnly == yesterday) {
+      return 'Вчера';
+    } else {
+      return DateFormat('d MMMM yyyy', 'ru_RU').format(date);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -89,9 +108,89 @@ class _StaffWalletSheetState extends ConsumerState<StaffWalletSheet> {
                       ),
                     ),
                     const SizedBox(height: 16),
-                    Text(
-                      'История транзакций',
-                      style: Theme.of(context).textTheme.titleMedium,
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'История транзакций',
+                          style: Theme.of(context).textTheme.titleMedium,
+                        ),
+                        // Фильтр по диапазону дат
+                        Row(
+                          children: [
+                            if (_selectedDateFrom != null || _selectedDateTo != null)
+                              IconButton(
+                                icon: const Icon(Icons.clear),
+                                tooltip: 'Очистить фильтр',
+                                onPressed: () {
+                                  setState(() {
+                                    _selectedDateFrom = null;
+                                    _selectedDateTo = null;
+                                  });
+                                },
+                              ),
+                            OutlinedButton(
+                              onPressed: () async {
+                                final now = DateTime.now();
+                                final firstDate = DateTime(now.year - 1, 1, 1);
+                                final lastDate = _selectedDateTo ?? DateTime(now.year, now.month, now.day);
+                                
+                                final picked = await showDatePicker(
+                                  context: context,
+                                  firstDate: firstDate,
+                                  lastDate: lastDate,
+                                  initialDate: _selectedDateFrom ?? DateTime(now.year, now.month, now.day),
+                                );
+                                
+                                if (picked != null && mounted) {
+                                  setState(() {
+                                    _selectedDateFrom = picked;
+                                    // Если дата "от" больше даты "до", сбрасываем "до"
+                                    if (_selectedDateTo != null && _selectedDateFrom!.isAfter(_selectedDateTo!)) {
+                                      _selectedDateTo = null;
+                                    }
+                                  });
+                                }
+                              },
+                              child: Text(
+                                _selectedDateFrom == null
+                                    ? 'ОТ'
+                                    : DateFormat('dd.MM.yyyy', 'ru_RU').format(_selectedDateFrom!),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            OutlinedButton(
+                              onPressed: () async {
+                                final now = DateTime.now();
+                                final firstDate = _selectedDateFrom ?? DateTime(now.year - 1, 1, 1);
+                                final lastDate = DateTime(now.year, now.month, now.day);
+                                
+                                final picked = await showDatePicker(
+                                  context: context,
+                                  firstDate: firstDate,
+                                  lastDate: lastDate,
+                                  initialDate: _selectedDateTo ?? (_selectedDateFrom ?? DateTime(now.year, now.month, now.day)),
+                                );
+                                
+                                if (picked != null && mounted) {
+                                  setState(() {
+                                    _selectedDateTo = picked;
+                                    // Если дата "до" меньше даты "от", сбрасываем "от"
+                                    if (_selectedDateFrom != null && _selectedDateTo!.isBefore(_selectedDateFrom!)) {
+                                      _selectedDateFrom = null;
+                                    }
+                                  });
+                                }
+                              },
+                              child: Text(
+                                _selectedDateTo == null
+                                    ? 'ДО'
+                                    : DateFormat('dd.MM.yyyy', 'ru_RU').format(_selectedDateTo!),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 8),
                     walletAsync.when(
@@ -106,15 +205,96 @@ class _StaffWalletSheetState extends ConsumerState<StaffWalletSheet> {
                         child: Text('Ошибка загрузки: $error'),
                       ),
                       data: (wallet) {
-                        if (wallet.transactions.isEmpty) {
+                        // Фильтруем транзакции по выбранному диапазону дат
+                        var filteredTransactions = wallet.transactions;
+                        if (_selectedDateFrom != null || _selectedDateTo != null) {
+                          DateTime? startDate;
+                          DateTime? endDate;
+                          
+                          if (_selectedDateFrom != null) {
+                            startDate = DateTime(
+                              _selectedDateFrom!.year,
+                              _selectedDateFrom!.month,
+                              _selectedDateFrom!.day,
+                            );
+                          }
+                          
+                          if (_selectedDateTo != null) {
+                            endDate = DateTime(
+                              _selectedDateTo!.year,
+                              _selectedDateTo!.month,
+                              _selectedDateTo!.day,
+                              23,
+                              59,
+                              59,
+                            );
+                          }
+                          
+                          filteredTransactions = wallet.transactions.where((t) {
+                            if (startDate != null && t.createdAt.isBefore(startDate.subtract(const Duration(seconds: 1)))) {
+                              return false;
+                            }
+                            if (endDate != null && t.createdAt.isAfter(endDate.add(const Duration(seconds: 1)))) {
+                              return false;
+                            }
+                            return true;
+                          }).toList();
+                        }
+
+                        if (filteredTransactions.isEmpty) {
                           return const Padding(
                             padding: EdgeInsets.all(16),
-                            child: Text('Транзакций пока нет'),
+                            child: Text('Транзакций нет за выбранный период'),
                           );
                         }
+
+                        // Группируем транзакции по дате
+                        final groupedTransactions = <DateTime, List<WalletTransactionItem>>{};
+                        for (final transaction in filteredTransactions) {
+                          final date = DateTime(
+                            transaction.createdAt.year,
+                            transaction.createdAt.month,
+                            transaction.createdAt.day,
+                          );
+                          groupedTransactions.putIfAbsent(date, () => []).add(transaction);
+                        }
+
+                        // Сортируем даты по убыванию (новые первыми)
+                        final sortedDates = groupedTransactions.keys.toList()
+                          ..sort((a, b) => b.compareTo(a));
+
                         return Column(
-                          children: wallet.transactions
-                              .map(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: sortedDates.map((date) {
+                            final transactions = groupedTransactions[date]!;
+                            // Сортируем транзакции внутри дня по времени (новые первыми)
+                            transactions.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+                            final isExpanded = _expandedDates.contains(date);
+                            
+                            return ExpansionTile(
+                              initiallyExpanded: isExpanded,
+                              onExpansionChanged: (expanded) {
+                                setState(() {
+                                  if (expanded) {
+                                    _expandedDates.add(date);
+                                  } else {
+                                    _expandedDates.remove(date);
+                                  }
+                                });
+                              },
+                              title: Text(
+                                _formatDateHeader(date),
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .titleSmall
+                                    ?.copyWith(
+                                      fontWeight: FontWeight.bold,
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .primary,
+                                    ),
+                              ),
+                              children: transactions.map(
                                 (transaction) => ListTile(
                                   leading: CircleAvatar(
                                     backgroundColor: transaction.amount >= 0
@@ -129,9 +309,8 @@ class _StaffWalletSheetState extends ConsumerState<StaffWalletSheet> {
                                           : Colors.red,
                                     ),
                                   ),
-                                  title: Text(transaction.description),
-                                  subtitle: Text(
-                                    formatter.format(transaction.createdAt),
+                                  title: Text(
+                                    '${transaction.cleanedDescription} ${DateFormat('HH:mm').format(transaction.createdAt)}',
                                   ),
                                   trailing: Text(
                                     '${transaction.amount.toStringAsFixed(2)} ₽',
@@ -139,11 +318,13 @@ class _StaffWalletSheetState extends ConsumerState<StaffWalletSheet> {
                                       color: transaction.amount >= 0
                                           ? Colors.green
                                           : Colors.red,
+                                      fontWeight: FontWeight.w500,
                                     ),
                                   ),
                                 ),
-                              )
-                              .toList(),
+                              ).toList(),
+                            );
+                          }).toList(),
                         );
                       },
                     ),
@@ -183,37 +364,98 @@ class _StaffWalletSheetState extends ConsumerState<StaffWalletSheet> {
                           child: Text('Ошибка загрузки: $error'),
                         ),
                         data: (sales) {
-                          if (sales.bookings.isEmpty) {
-                            return const Padding(
-                              padding: EdgeInsets.all(16),
-                              child: Text('Продаж пока нет'),
+                          // Фильтруем продажи по выбранному диапазону дат
+                          var filteredBookings = sales.bookings;
+                          if (_selectedDateFrom != null || _selectedDateTo != null) {
+                            DateTime? startDate;
+                            DateTime? endDate;
+                            
+                            if (_selectedDateFrom != null) {
+                              startDate = DateTime(
+                                _selectedDateFrom!.year,
+                                _selectedDateFrom!.month,
+                                _selectedDateFrom!.day,
+                              );
+                            }
+                            
+                            if (_selectedDateTo != null) {
+                              endDate = DateTime(
+                                _selectedDateTo!.year,
+                                _selectedDateTo!.month,
+                                _selectedDateTo!.day,
+                                23,
+                                59,
+                                59,
+                              );
+                            }
+                            
+                            filteredBookings = sales.bookings.where((b) {
+                              if (startDate != null && b.bookedAt.isBefore(startDate.subtract(const Duration(seconds: 1)))) {
+                                return false;
+                              }
+                              if (endDate != null && b.bookedAt.isAfter(endDate.add(const Duration(seconds: 1)))) {
+                                return false;
+                              }
+                              return true;
+                            }).toList();
+                          }
+                          
+                          if (filteredBookings.isEmpty) {
+                            return Padding(
+                              padding: const EdgeInsets.all(16),
+                              child: Text(
+                                (_selectedDateFrom == null && _selectedDateTo == null)
+                                    ? 'Продаж пока нет'
+                                    : 'Продаж нет за выбранный период',
+                              ),
                             );
                           }
+                          
+                          // Пересчитываем общую сумму продаж
+                          final totalSales = filteredBookings
+                              .fold<double>(0, (sum, booking) => sum + booking.price);
+                          
                           return Column(
-                            children: sales.bookings
-                                .map(
-                                  (booking) => ListTile(
-                                    title: Text(booking.excursion.title),
-                                    subtitle: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          formatter.format(
-                                              booking.excursion.dateTime),
-                                        ),
-                                        Text(
-                                          '${booking.customerName} • ${booking.customerPhone}',
-                                        ),
-                                        Text(booking.passengerType.label),
-                                      ],
-                                    ),
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              if (_selectedDateFrom != null || _selectedDateTo != null)
+                                Card(
+                                  child: ListTile(
+                                    title: const Text('Общая сумма продаж'),
                                     trailing: Text(
-                                      '${booking.price.toStringAsFixed(2)} ₽',
+                                      '${totalSales.toStringAsFixed(2)} ₽',
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .titleLarge
+                                          ?.copyWith(color: Colors.green),
                                     ),
                                   ),
-                                )
-                                .toList(),
+                                ),
+                              ...filteredBookings
+                                  .map(
+                                    (booking) => ListTile(
+                                      title: Text(booking.excursion.title),
+                                      subtitle: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            formatter.format(
+                                                booking.excursion.dateTime),
+                                          ),
+                                          Text(
+                                            '${booking.customerName} • ${booking.customerPhone}',
+                                          ),
+                                          Text(booking.passengerType.label),
+                                        ],
+                                      ),
+                                      trailing: Text(
+                                        '${booking.price.toStringAsFixed(2)} ₽',
+                                      ),
+                                    ),
+                                  )
+                                  .toList(),
+                            ],
                           );
                         },
                       ),
@@ -235,17 +477,71 @@ class _StaffWalletSheetState extends ConsumerState<StaffWalletSheet> {
                           child: Text('Ошибка загрузки: $error'),
                         ),
                         data: (profit) {
-                          if (profit.breakdown.isEmpty) {
-                            return const Padding(
-                              padding: EdgeInsets.all(16),
-                              child: Text('Прибыль пока не рассчитана'),
+                          // Фильтруем прибыль по выбранному диапазону дат
+                          var filteredBreakdown = profit.breakdown;
+                          if (_selectedDateFrom != null || _selectedDateTo != null) {
+                            DateTime? startDate;
+                            DateTime? endDate;
+                            
+                            if (_selectedDateFrom != null) {
+                              startDate = DateTime(
+                                _selectedDateFrom!.year,
+                                _selectedDateFrom!.month,
+                                _selectedDateFrom!.day,
+                              );
+                            }
+                            
+                            if (_selectedDateTo != null) {
+                              endDate = DateTime(
+                                _selectedDateTo!.year,
+                                _selectedDateTo!.month,
+                                _selectedDateTo!.day,
+                                23,
+                                59,
+                                59,
+                              );
+                            }
+                            
+                            filteredBreakdown = profit.breakdown.where((item) {
+                              if (startDate != null && item.bookedAt.isBefore(startDate.subtract(const Duration(seconds: 1)))) {
+                                return false;
+                              }
+                              if (endDate != null && item.bookedAt.isAfter(endDate.add(const Duration(seconds: 1)))) {
+                                return false;
+                              }
+                              return true;
+                            }).toList();
+                          }
+                          
+                          if (filteredBreakdown.isEmpty) {
+                            return Padding(
+                              padding: const EdgeInsets.all(16),
+                              child: Text(
+                                (_selectedDateFrom == null && _selectedDateTo == null)
+                                    ? 'Прибыль пока не рассчитана'
+                                    : 'Прибыль не рассчитана за выбранный период',
+                              ),
                             );
                           }
 
-                          final totalsTiles = profit.totalsByType.entries
+                          // Пересчитываем суммы для отфильтрованных данных
+                          final filteredTotalsByType = <String, ({double sales, double commission})>{};
+                          double filteredTotalProfit = 0;
+                          
+                          for (final item in filteredBreakdown) {
+                            final typeKey = item.passengerType.label;
+                            final current = filteredTotalsByType[typeKey] ?? (sales: 0, commission: 0);
+                            filteredTotalsByType[typeKey] = (
+                              sales: current.sales + item.price,
+                              commission: current.commission + item.commissionAmount,
+                            );
+                            filteredTotalProfit += item.commissionAmount;
+                          }
+
+                          final totalsTiles = filteredTotalsByType.entries
                               .map(
                                 (entry) => ListTile(
-                                  title: Text(entry.key.label),
+                                  title: Text(entry.key),
                                   subtitle: Text(
                                     'Продажи: ${entry.value.sales.toStringAsFixed(2)} ₽',
                                   ),
@@ -262,14 +558,18 @@ class _StaffWalletSheetState extends ConsumerState<StaffWalletSheet> {
                             children: [
                               Card(
                                 child: ListTile(
-                                  title: const Text('Общая прибыль'),
+                                  title: Text(
+                                    (_selectedDateFrom == null && _selectedDateTo == null)
+                                        ? 'Общая прибыль'
+                                        : 'Прибыль за период',
+                                  ),
                                   subtitle: Text(
                                     profit.isPartner
                                         ? 'Партнёрская комиссия'
                                         : '10% от продаж',
                                   ),
                                   trailing: Text(
-                                    '${profit.totalProfit.toStringAsFixed(2)} ₽',
+                                    '${filteredTotalProfit.toStringAsFixed(2)} ₽',
                                     style: Theme.of(context)
                                         .textTheme
                                         .headlineSmall

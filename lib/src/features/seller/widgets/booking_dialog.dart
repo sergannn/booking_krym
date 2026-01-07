@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../../data/models/booking.dart';
 import '../../../data/models/stop.dart';
 import '../../../data/models/excursion.dart';
+import '../../../data/models/user_summary.dart';
 import '../../../data/repositories/bookings_repository.dart';
 
 class BookingDialog extends StatefulWidget {
@@ -11,12 +12,16 @@ class BookingDialog extends StatefulWidget {
     required this.tariffs,
     this.initialSeatNumbers = const [],
     this.lockSeatSelection = false,
+    this.sellers, // Список продавцов для выбора (только для админов)
+    this.currentUserId, // ID текущего пользователя (для админов)
   });
 
   final List<Stop> stops;
   final Map<String, ExcursionTariff> tariffs;
   final List<int> initialSeatNumbers;
   final bool lockSeatSelection;
+  final List<UserSummary>? sellers; // Список продавцов для выбора
+  final int? currentUserId; // ID текущего пользователя
 
   @override
   State<BookingDialog> createState() => _BookingDialogState();
@@ -31,6 +36,7 @@ class _BookingDialogState extends State<BookingDialog>
   int? _stopId;
   Stop? _selectedStop;
   late final List<int> _seatNumbers;
+  int? _selectedSellerId; // Выбранный продавец (для админов)
 
   // Данные для каждого места: номер места -> данные пассажира
   final Map<int, _SeatPassengerData> _seatData = {};
@@ -49,6 +55,10 @@ class _BookingDialogState extends State<BookingDialog>
     if (widget.stops.isNotEmpty) {
       _selectedStop = widget.stops.first;
       _stopId = _selectedStop!.id;
+    }
+    // По умолчанию выбираем текущего пользователя (если это админ)
+    if (widget.currentUserId != null) {
+      _selectedSellerId = widget.currentUserId;
     }
     _tabController = TabController(
       length: _seatNumbers.isEmpty ? 1 : _seatNumbers.length,
@@ -96,12 +106,13 @@ class _BookingDialogState extends State<BookingDialog>
       title: const Text('Новое бронирование'),
       content: SizedBox(
         width: double.maxFinite,
-        child: Form(
-          key: _formKey,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
+        child: SingleChildScrollView(
+          child: Form(
+            key: _formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
               // Поле для ввода мест (если не заблокировано)
               if (!widget.lockSeatSelection) ...[
                 TextFormField(
@@ -161,6 +172,40 @@ class _BookingDialogState extends State<BookingDialog>
 
               const SizedBox(height: 16),
 
+              // Выбор продавца (только для админов)
+              if (widget.sellers != null && widget.sellers!.isNotEmpty) ...[
+                DropdownButtonFormField<int>(
+                  value: _selectedSellerId,
+                  decoration: const InputDecoration(
+                    labelText: 'Бронировать от лица',
+                    helperText: 'Выберите продавца или себя',
+                  ),
+                  items: [
+                    // Опция "Я сам" (текущий пользователь)
+                    if (widget.currentUserId != null)
+                      DropdownMenuItem(
+                        value: widget.currentUserId,
+                        child: const Text('Я сам (администратор)'),
+                      ),
+                    // Список продавцов
+                    ...widget.sellers!.map(
+                      (seller) => DropdownMenuItem(
+                        value: seller.id,
+                        child: Text('${seller.name})') ,// (${seller.email})'),
+                      ),
+                    ),
+                  ],
+                  onChanged: (value) {
+                    setState(() {
+                      _selectedSellerId = value;
+                    });
+                  },
+                  validator: (value) =>
+                      value == null ? 'Выберите продавца' : null,
+                ),
+                const SizedBox(height: 16),
+              ],
+
               // Общая остановка для всех мест
               DropdownButtonFormField<int>(
                 value: _stopId,
@@ -214,87 +259,97 @@ class _BookingDialogState extends State<BookingDialog>
                   },
                 ),
               ],
+              
+              // Кнопки действий (внутри скроллируемого контента)
+              const SizedBox(height: 24),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: const Text('Отмена'),
+                  ),
+                  const SizedBox(width: 8),
+                  FilledButton(
+                    onPressed: () {
+                      if (!(_formKey.currentState?.validate() ?? false)) {
+                        return;
+                      }
+
+                      if (!hasSeats) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Введите номера мест')),
+                        );
+                        return;
+                      }
+
+                      // Проверяем, что для всех мест заполнены данные
+                      for (final seatNum in _seatNumbers) {
+                        final data = _seatData[seatNum]!;
+                        if (data.nameController.text.trim().isEmpty) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                                content:
+                                    Text('Введите имя пассажира для места $seatNum')),
+                          );
+                          return;
+                        }
+                        if (data.phoneController.text.trim().isEmpty) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                                content:
+                                    Text('Введите телефон пассажира для места $seatNum')),
+                          );
+                          return;
+                        }
+                        final tariff = widget.tariffs[data.passengerType.apiValue];
+                        if (tariff == null) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                                content: Text(
+                                    'Цена для типа "${data.passengerType.label}" на месте $seatNum не настроена')),
+                          );
+                          return;
+                        }
+                      }
+
+                      // Собираем все места с данными
+                      final seats = _seatNumbers.map((seatNum) {
+                        final data = _seatData[seatNum]!;
+                        return SeatBooking(
+                          seatNumber: seatNum,
+                          passengerType: data.passengerType,
+                          withEntry: data.withEntry,
+                          customerName: data.nameController.text.trim(),
+                          customerPhone: data.phoneController.text.trim(),
+                        );
+                      }).toList();
+
+                      Navigator.of(context).pop(
+                        BookingDialogResult(
+                          seats: seats,
+                          seatNumbers: _seatNumbers,
+                          pricePerSeat: 0, // Не используется в новом формате
+                          customerName:
+                              _seatData[_seatNumbers.first]!.nameController.text.trim(),
+                          customerPhone:
+                              _seatData[_seatNumbers.first]!.phoneController.text.trim(),
+                          passengerType: _seatData[_seatNumbers.first]!.passengerType,
+                          stop: _selectedStop!,
+                          bookedById: _selectedSellerId, // ID выбранного продавца (для админов)
+                        ),
+                      );
+                    },
+                    child: const Text('Сохранить'),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8), // Небольшой отступ снизу для удобства
             ],
+            ),
           ),
         ),
       ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Отмена'),
-        ),
-        FilledButton(
-          onPressed: () {
-            if (!(_formKey.currentState?.validate() ?? false)) {
-              return;
-            }
-
-            if (!hasSeats) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Введите номера мест')),
-              );
-              return;
-            }
-
-            // Проверяем, что для всех мест заполнены данные
-            for (final seatNum in _seatNumbers) {
-              final data = _seatData[seatNum]!;
-              if (data.nameController.text.trim().isEmpty) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                      content:
-                          Text('Введите имя пассажира для места $seatNum')),
-                );
-                return;
-              }
-              if (data.phoneController.text.trim().isEmpty) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                      content:
-                          Text('Введите телефон пассажира для места $seatNum')),
-                );
-                return;
-              }
-              final tariff = widget.tariffs[data.passengerType.apiValue];
-              if (tariff == null) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                      content: Text(
-                          'Цена для типа "${data.passengerType.label}" на месте $seatNum не настроена')),
-                );
-                return;
-              }
-            }
-
-            // Собираем все места с данными
-            final seats = _seatNumbers.map((seatNum) {
-              final data = _seatData[seatNum]!;
-              return SeatBooking(
-                seatNumber: seatNum,
-                passengerType: data.passengerType,
-                withEntry: data.withEntry,
-                customerName: data.nameController.text.trim(),
-                customerPhone: data.phoneController.text.trim(),
-              );
-            }).toList();
-
-            Navigator.of(context).pop(
-              BookingDialogResult(
-                seats: seats,
-                seatNumbers: _seatNumbers,
-                pricePerSeat: 0, // Не используется в новом формате
-                customerName:
-                    _seatData[_seatNumbers.first]!.nameController.text.trim(),
-                customerPhone:
-                    _seatData[_seatNumbers.first]!.phoneController.text.trim(),
-                passengerType: _seatData[_seatNumbers.first]!.passengerType,
-                stop: _selectedStop!,
-              ),
-            );
-          },
-          child: const Text('Сохранить'),
-        ),
-      ],
     );
   }
 
@@ -487,6 +542,7 @@ class BookingDialogResult {
     required this.passengerType,
     required this.stop,
     this.seats, // Новый формат: список мест с типами
+    this.bookedById, // ID продавца, от лица которого бронируем (для админов)
   });
 
   final List<int> seatNumbers;
@@ -496,6 +552,7 @@ class BookingDialogResult {
   final PassengerType passengerType;
   final Stop stop;
   final List<SeatBooking>? seats; // Новый формат
+  final int? bookedById; // ID продавца, от лица которого бронируем
 
   int get stopId => stop.id;
 }

@@ -45,6 +45,8 @@ class BookSeatPayload {
     // Старый формат (для обратной совместимости)
     this.seatNumbers,
     this.passengerType,
+    // Для админов: бронирование от лица продавца
+    this.bookedById,
   }) : assert(
           (seats != null && seats.isNotEmpty) ||
               (seatNumbers != null &&
@@ -67,6 +69,9 @@ class BookSeatPayload {
   // Старый формат (для обратной совместимости)
   final List<int>? seatNumbers;
   final PassengerType? passengerType;
+  
+  // Для админов: бронирование от лица продавца
+  final int? bookedById;
 
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{
@@ -96,6 +101,11 @@ class BookSeatPayload {
       // Старый формат для обратной совместимости
       json['seat_numbers'] = seatNumbers!;
       json['passenger_type'] = passengerType!.apiValue;
+    }
+
+    // Добавляем booked_by_id, если указан (для админов)
+    if (bookedById != null) {
+      json['booked_by_id'] = bookedById;
     }
 
     return json;

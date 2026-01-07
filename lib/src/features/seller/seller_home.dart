@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import '../../data/models/user.dart';
 import '../../data/models/excursion.dart';
 import '../../data/models/booking.dart';
+import '../../data/models/wallet.dart';
 import '../../data/repositories/bookings_repository.dart';
 import '../seller/widgets/booking_dialog.dart';
 import '../seller/widgets/seat_access_request_dialog.dart';
@@ -14,6 +15,8 @@ import '../auth/auth_controller.dart';
 import '../common/utils/pdf_downloader.dart';
 import '../common/widgets/cancellation_reason_dialog.dart';
 import '../admin/widgets/prices_tab.dart';
+import '../common/settings_screen.dart';
+import '../../core/services/internet_connection_service.dart';
 
 class SellerHomePage extends ConsumerStatefulWidget {
   const SellerHomePage({super.key, required this.user});
@@ -37,8 +40,18 @@ class _SellerHomePageState extends ConsumerState<SellerHomePage> {
       const _ScheduleTab(),
     ];
 
+    // Отслеживаем статус интернета
+    final internetStatusAsync = ref.watch(internetStatusProvider);
+    final hasInternet = internetStatusAsync.valueOrNull ?? true;
+    
+    // Определяем цвет фона AppBar в зависимости от статуса интернета
+    final appBarColor = hasInternet 
+        ? Theme.of(context).colorScheme.primary 
+        : Colors.red;
+
     return Scaffold(
       appBar: AppBar(
+        backgroundColor: appBarColor,
         title: Text('Организатор экскурсии — ${widget.user.name}'),
         actions: [
           IconButton(
@@ -51,14 +64,9 @@ class _SellerHomePageState extends ConsumerState<SellerHomePage> {
               ref.invalidate(userSalesFutureProvider(widget.user.id));
             },
           ),
-          IconButton(
-            tooltip: 'Выйти',
-            icon: const Icon(Icons.logout),
-            onPressed: () =>
-                ref.read(authControllerProvider.notifier).signOut(),
-          ),
         ],
       ),
+      drawer: _SellerDrawer(user: widget.user),
       body: pages[_currentIndex],
       bottomNavigationBar: NavigationBar(
         selectedIndex: _currentIndex,
@@ -315,11 +323,17 @@ class _ExcursionTile extends ConsumerWidget {
     // Определяем, доступна ли экскурсия для бронирования
     final isAvailable = excursion.availableSeatsCount > 0 && !excursion.isPast;
 
+    // Определяем цвет фона: внеплановые - светло-желтый, недоступные - серый, остальные - по умолчанию
+    Color? cardColor;
+    if (!isAvailable) {
+      cardColor = Colors.grey.shade200; // Серый фон для недоступных
+    } else if (excursion.isUnscheduled) {
+      cardColor = Colors.amber.shade50; // Светло-желтый для внеплановых
+    }
+
     return Card(
       margin: const EdgeInsets.only(bottom: 6),
-      color: isAvailable
-          ? null
-          : Colors.grey.shade200, // Серый фон для недоступных
+      color: cardColor,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         child: Row(
@@ -898,6 +912,24 @@ class _SellerWalletTab extends ConsumerStatefulWidget {
 
 class _SellerWalletTabState extends ConsumerState<_SellerWalletTab> {
   int _sectionIndex = 0;
+  DateTime? _selectedDateFrom; // Дата начала диапазона
+  DateTime? _selectedDateTo; // Дата конца диапазона
+  final Set<DateTime> _expandedDates = {}; // Отслеживаем раскрытые даты
+
+  String _formatDateHeader(DateTime date) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final yesterday = today.subtract(const Duration(days: 1));
+    final dateOnly = DateTime(date.year, date.month, date.day);
+
+    if (dateOnly == today) {
+      return 'Сегодня';
+    } else if (dateOnly == yesterday) {
+      return 'Вчера';
+    } else {
+      return DateFormat('d MMMM yyyy', 'ru_RU').format(date);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -941,44 +973,216 @@ class _SellerWalletTabState extends ConsumerState<_SellerWalletTab> {
                 ),
               ),
               const SizedBox(height: 16),
-              Text(
-                'История транзакций',
-                style: Theme.of(context).textTheme.titleMedium,
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'История транзакций',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  // Фильтр по диапазону дат
+                  Row(
+                    children: [
+                      if (_selectedDateFrom != null || _selectedDateTo != null)
+                        IconButton(
+                          icon: const Icon(Icons.clear),
+                          tooltip: 'Очистить фильтр',
+                          onPressed: () {
+                            setState(() {
+                              _selectedDateFrom = null;
+                              _selectedDateTo = null;
+                            });
+                          },
+                        ),
+                      OutlinedButton(
+                        onPressed: () async {
+                          final now = DateTime.now();
+                          final firstDate = DateTime(now.year - 1, 1, 1);
+                          final lastDate = _selectedDateTo ?? DateTime(now.year, now.month, now.day);
+                          
+                          final picked = await showDatePicker(
+                            context: context,
+                            firstDate: firstDate,
+                            lastDate: lastDate,
+                            initialDate: _selectedDateFrom ?? DateTime(now.year, now.month, now.day),
+                          );
+                          
+                          if (picked != null && mounted) {
+                            setState(() {
+                              _selectedDateFrom = picked;
+                              // Если дата "от" больше даты "до", сбрасываем "до"
+                              if (_selectedDateTo != null && _selectedDateFrom!.isAfter(_selectedDateTo!)) {
+                                _selectedDateTo = null;
+                              }
+                            });
+                          }
+                        },
+                        child: Text(
+                          _selectedDateFrom == null
+                              ? 'ОТ'
+                              : DateFormat('dd.MM.yyyy', 'ru_RU').format(_selectedDateFrom!),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      OutlinedButton(
+                        onPressed: () async {
+                          final now = DateTime.now();
+                          final firstDate = _selectedDateFrom ?? DateTime(now.year - 1, 1, 1);
+                          final lastDate = DateTime(now.year, now.month, now.day);
+                          
+                          final picked = await showDatePicker(
+                            context: context,
+                            firstDate: firstDate,
+                            lastDate: lastDate,
+                            initialDate: _selectedDateTo ?? (_selectedDateFrom ?? DateTime(now.year, now.month, now.day)),
+                          );
+                          
+                          if (picked != null && mounted) {
+                            setState(() {
+                              _selectedDateTo = picked;
+                              // Если дата "до" меньше даты "от", сбрасываем "от"
+                              if (_selectedDateFrom != null && _selectedDateTo!.isBefore(_selectedDateFrom!)) {
+                                _selectedDateFrom = null;
+                              }
+                            });
+                          }
+                        },
+                        child: Text(
+                          _selectedDateTo == null
+                              ? 'ДО'
+                              : DateFormat('dd.MM.yyyy', 'ru_RU').format(_selectedDateTo!),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ),
               const SizedBox(height: 8),
-              if (wallet.transactions.isEmpty)
-                const Padding(
-                  padding: EdgeInsets.all(16),
-                  child: Text('Транзакций пока нет'),
-                )
-              else
-                ...wallet.transactions.map(
-                  (transaction) => ListTile(
-                    leading: CircleAvatar(
-                      backgroundColor: transaction.amount >= 0
-                          ? Colors.green.shade100
-                          : Colors.red.shade100,
-                      child: Icon(
-                        transaction.amount >= 0
-                            ? Icons.arrow_downward
-                            : Icons.arrow_upward,
-                        color:
-                            transaction.amount >= 0 ? Colors.green : Colors.red,
-                      ),
-                    ),
-                    title: Text(transaction.description),
-                    subtitle: Text(
-                      formatter.format(transaction.createdAt),
-                    ),
-                    trailing: Text(
-                      '${transaction.amount.toStringAsFixed(2)} ₽',
-                      style: TextStyle(
-                        color:
-                            transaction.amount >= 0 ? Colors.green : Colors.red,
-                      ),
-                    ),
-                  ),
-                ),
+              Builder(
+                builder: (context) {
+                  // Фильтруем транзакции по выбранному диапазону дат
+                  var filteredTransactions = wallet.transactions;
+                  if (_selectedDateFrom != null || _selectedDateTo != null) {
+                    DateTime? startDate;
+                    DateTime? endDate;
+                    
+                    if (_selectedDateFrom != null) {
+                      startDate = DateTime(
+                        _selectedDateFrom!.year,
+                        _selectedDateFrom!.month,
+                        _selectedDateFrom!.day,
+                      );
+                    }
+                    
+                    if (_selectedDateTo != null) {
+                      endDate = DateTime(
+                        _selectedDateTo!.year,
+                        _selectedDateTo!.month,
+                        _selectedDateTo!.day,
+                        23,
+                        59,
+                        59,
+                      );
+                    }
+                    
+                    filteredTransactions = wallet.transactions.where((t) {
+                      if (startDate != null && t.createdAt.isBefore(startDate.subtract(const Duration(seconds: 1)))) {
+                        return false;
+                      }
+                      if (endDate != null && t.createdAt.isAfter(endDate.add(const Duration(seconds: 1)))) {
+                        return false;
+                      }
+                      return true;
+                    }).toList();
+                  }
+
+                  if (filteredTransactions.isEmpty) {
+                    return const Padding(
+                      padding: EdgeInsets.all(16),
+                      child: Text('Транзакций нет за выбранный период'),
+                    );
+                  }
+
+                  // Группируем транзакции по дате
+                  final groupedTransactions = <DateTime, List<WalletTransactionItem>>{};
+                  for (final transaction in filteredTransactions) {
+                    final date = DateTime(
+                      transaction.createdAt.year,
+                      transaction.createdAt.month,
+                      transaction.createdAt.day,
+                    );
+                    groupedTransactions.putIfAbsent(date, () => []).add(transaction);
+                  }
+
+                  // Сортируем даты по убыванию (новые первыми)
+                  final sortedDates = groupedTransactions.keys.toList()
+                    ..sort((a, b) => b.compareTo(a));
+
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: sortedDates.map((date) {
+                      final transactions = groupedTransactions[date]!;
+                      // Сортируем транзакции внутри дня по времени (новые первыми)
+                      transactions.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+                      final isExpanded = _expandedDates.contains(date);
+                      
+                      return ExpansionTile(
+                        initiallyExpanded: isExpanded,
+                        onExpansionChanged: (expanded) {
+                          setState(() {
+                            if (expanded) {
+                              _expandedDates.add(date);
+                            } else {
+                              _expandedDates.remove(date);
+                            }
+                          });
+                        },
+                        title: Text(
+                          _formatDateHeader(date),
+                          style: Theme.of(context)
+                              .textTheme
+                              .titleSmall
+                              ?.copyWith(
+                                fontWeight: FontWeight.bold,
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .primary,
+                              ),
+                        ),
+                        children: transactions.map(
+                          (transaction) => ListTile(
+                            leading: CircleAvatar(
+                              backgroundColor: transaction.amount >= 0
+                                  ? Colors.green.shade100
+                                  : Colors.red.shade100,
+                              child: Icon(
+                                transaction.amount >= 0
+                                    ? Icons.arrow_downward
+                                    : Icons.arrow_upward,
+                                color: transaction.amount >= 0
+                                    ? Colors.green
+                                    : Colors.red,
+                              ),
+                            ),
+                            title: Text(
+                              '${transaction.cleanedDescription} ${DateFormat('HH:mm').format(transaction.createdAt)}',
+                            ),
+                            trailing: Text(
+                              '${transaction.amount.toStringAsFixed(2)} ₽',
+                              style: TextStyle(
+                                color: transaction.amount >= 0
+                                    ? Colors.green
+                                    : Colors.red,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                        ).toList(),
+                      );
+                    }).toList(),
+                  );
+                },
+              ),
               const SizedBox(height: 24),
               ToggleButtons(
                 borderRadius: BorderRadius.circular(8),
@@ -1014,36 +1218,97 @@ class _SellerWalletTabState extends ConsumerState<_SellerWalletTab> {
                     child: Text('Ошибка загрузки: $error'),
                   ),
                   data: (sales) {
-                    if (sales.bookings.isEmpty) {
-                      return const Padding(
-                        padding: EdgeInsets.all(16),
-                        child: Text('Продаж пока нет'),
+                    // Фильтруем продажи по выбранному диапазону дат
+                    var filteredBookings = sales.bookings;
+                    if (_selectedDateFrom != null || _selectedDateTo != null) {
+                      DateTime? startDate;
+                      DateTime? endDate;
+                      
+                      if (_selectedDateFrom != null) {
+                        startDate = DateTime(
+                          _selectedDateFrom!.year,
+                          _selectedDateFrom!.month,
+                          _selectedDateFrom!.day,
+                        );
+                      }
+                      
+                      if (_selectedDateTo != null) {
+                        endDate = DateTime(
+                          _selectedDateTo!.year,
+                          _selectedDateTo!.month,
+                          _selectedDateTo!.day,
+                          23,
+                          59,
+                          59,
+                        );
+                      }
+                      
+                      filteredBookings = sales.bookings.where((b) {
+                        if (startDate != null && b.bookedAt.isBefore(startDate.subtract(const Duration(seconds: 1)))) {
+                          return false;
+                        }
+                        if (endDate != null && b.bookedAt.isAfter(endDate.add(const Duration(seconds: 1)))) {
+                          return false;
+                        }
+                        return true;
+                      }).toList();
+                    }
+                    
+                    if (filteredBookings.isEmpty) {
+                      return Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Text(
+                          (_selectedDateFrom == null && _selectedDateTo == null)
+                              ? 'Продаж пока нет'
+                              : 'Продаж нет за выбранный период',
+                        ),
                       );
                     }
+                    
+                    // Пересчитываем общую сумму продаж
+                    final totalSales = filteredBookings
+                        .fold<double>(0, (sum, booking) => sum + booking.price);
+                    
                     return Column(
-                      children: sales.bookings
-                          .map(
-                            (booking) => ListTile(
-                              title: Text(booking.excursion.title),
-                              subtitle: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    formatter
-                                        .format(booking.excursion.dateTime),
-                                  ),
-                                  Text(
-                                    '${booking.customerName} • ${booking.customerPhone}',
-                                  ),
-                                  Text(booking.passengerType.label),
-                                ],
-                              ),
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        if (_selectedDateFrom != null || _selectedDateTo != null)
+                          Card(
+                            child: ListTile(
+                              title: const Text('Общая сумма продаж'),
                               trailing: Text(
-                                '${booking.price.toStringAsFixed(2)} ₽',
+                                '${totalSales.toStringAsFixed(2)} ₽',
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .titleLarge
+                                    ?.copyWith(color: Colors.green),
                               ),
                             ),
-                          )
-                          .toList(),
+                          ),
+                        ...filteredBookings
+                            .map(
+                              (booking) => ListTile(
+                                title: Text(booking.excursion.title),
+                                subtitle: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      formatter
+                                          .format(booking.excursion.dateTime),
+                                    ),
+                                    Text(
+                                      '${booking.customerName} • ${booking.customerPhone}',
+                                    ),
+                                    Text(booking.passengerType.label),
+                                  ],
+                                ),
+                                trailing: Text(
+                                  '${booking.price.toStringAsFixed(2)} ₽',
+                                ),
+                              ),
+                            )
+                            .toList(),
+                      ],
                     );
                   },
                 ),
@@ -1065,17 +1330,71 @@ class _SellerWalletTabState extends ConsumerState<_SellerWalletTab> {
                     child: Text('Ошибка загрузки: $error'),
                   ),
                   data: (profit) {
-                    if (profit.breakdown.isEmpty) {
-                      return const Padding(
-                        padding: EdgeInsets.all(16),
-                        child: Text('Прибыль пока не рассчитана'),
+                    // Фильтруем прибыль по выбранному диапазону дат
+                    var filteredBreakdown = profit.breakdown;
+                    if (_selectedDateFrom != null || _selectedDateTo != null) {
+                      DateTime? startDate;
+                      DateTime? endDate;
+                      
+                      if (_selectedDateFrom != null) {
+                        startDate = DateTime(
+                          _selectedDateFrom!.year,
+                          _selectedDateFrom!.month,
+                          _selectedDateFrom!.day,
+                        );
+                      }
+                      
+                      if (_selectedDateTo != null) {
+                        endDate = DateTime(
+                          _selectedDateTo!.year,
+                          _selectedDateTo!.month,
+                          _selectedDateTo!.day,
+                          23,
+                          59,
+                          59,
+                        );
+                      }
+                      
+                      filteredBreakdown = profit.breakdown.where((item) {
+                        if (startDate != null && item.bookedAt.isBefore(startDate.subtract(const Duration(seconds: 1)))) {
+                          return false;
+                        }
+                        if (endDate != null && item.bookedAt.isAfter(endDate.add(const Duration(seconds: 1)))) {
+                          return false;
+                        }
+                        return true;
+                      }).toList();
+                    }
+                    
+                    if (filteredBreakdown.isEmpty) {
+                      return Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Text(
+                          (_selectedDateFrom == null && _selectedDateTo == null)
+                              ? 'Прибыль пока не рассчитана'
+                              : 'Прибыль не рассчитана за выбранный период',
+                        ),
                       );
                     }
 
-                    final totalsTiles = profit.totalsByType.entries
+                    // Пересчитываем суммы для отфильтрованных данных
+                    final filteredTotalsByType = <String, ({double sales, double commission})>{};
+                    double filteredTotalProfit = 0;
+                    
+                    for (final item in filteredBreakdown) {
+                      final typeKey = item.passengerType.label;
+                      final current = filteredTotalsByType[typeKey] ?? (sales: 0, commission: 0);
+                      filteredTotalsByType[typeKey] = (
+                        sales: current.sales + item.price,
+                        commission: current.commission + item.commissionAmount,
+                      );
+                      filteredTotalProfit += item.commissionAmount;
+                    }
+
+                    final totalsTiles = filteredTotalsByType.entries
                         .map(
                           (entry) => ListTile(
-                            title: Text(entry.key.label),
+                            title: Text(entry.key),
                             subtitle: Text(
                               'Продажи: ${entry.value.sales.toStringAsFixed(2)} ₽',
                             ),
@@ -1092,14 +1411,18 @@ class _SellerWalletTabState extends ConsumerState<_SellerWalletTab> {
                       children: [
                         Card(
                           child: ListTile(
-                            title: const Text('Общая прибыль'),
+                            title: Text(
+                              (_selectedDateFrom == null && _selectedDateTo == null)
+                                  ? 'Общая прибыль'
+                                  : 'Прибыль за период',
+                            ),
                             subtitle: Text(
                               profit.isPartner
                                   ? 'Партнёрская комиссия'
                                   : '10% от продаж',
                             ),
                             trailing: Text(
-                              '${profit.totalProfit.toStringAsFixed(2)} ₽',
+                              '${filteredTotalProfit.toStringAsFixed(2)} ₽',
                               style: Theme.of(context)
                                   .textTheme
                                   .headlineSmall
@@ -1164,7 +1487,7 @@ class _SellerWalletTabState extends ConsumerState<_SellerWalletTab> {
                     );
                   },
                 ),
-              ],
+              ],/*
               const SizedBox(height: 24),
               Text(
                 'Активные бронирования',
@@ -1217,7 +1540,7 @@ class _SellerWalletTabState extends ConsumerState<_SellerWalletTab> {
                     }).toList(),
                   );
                 },
-              ),
+              ),*/
             ],
           ),
         );
@@ -1399,6 +1722,83 @@ class _ScheduleTab extends ConsumerWidget {
           ),
         );
       },
+    );
+  }
+}
+
+class _SellerDrawer extends ConsumerWidget {
+  const _SellerDrawer({required this.user});
+
+  final User user;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return Drawer(
+      child: ListView(
+        padding: EdgeInsets.zero,
+        children: [
+          DrawerHeader(
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.primary,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                Text(
+                  'Организатор экскурсии',
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                      ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  user.name,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: Colors.white70,
+                      ),
+                ),
+              ],
+            ),
+          ),
+          ListTile(
+            leading: const Icon(Icons.settings),
+            title: const Text('Настройки'),
+            subtitle: const Text('Интервал проверки интернета и др.'),
+            onTap: () {
+              Navigator.of(context).pop();
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (context) => const SettingsScreen(),
+                ),
+              );
+            },
+          ),
+          const Divider(),
+          ListTile(
+            leading: const Icon(Icons.info_outline),
+            title: const Text('О приложении'),
+            onTap: () {
+              Navigator.of(context).pop();
+              showAboutDialog(
+                context: context,
+                applicationName: 'Система управления экскурсиями',
+                applicationVersion: '1.0.0',
+              );
+            },
+          ),
+          const Divider(),
+          ListTile(
+            leading: const Icon(Icons.logout),
+            title: const Text('Выход'),
+            onTap: () async {
+              Navigator.of(context).pop();
+              await ref.read(authControllerProvider.notifier).signOut();
+            },
+          ),
+        ],
+      ),
     );
   }
 }

@@ -7,6 +7,7 @@ environment:
   sdk: '>=3.4.0 <4.0.0'
 
 dependencies:
+  sentry_flutter: ^9.9.1
   flutter:
     sdk: flutter
   flutter_riverpod: ^2.5.1
@@ -23,8 +24,10 @@ dependencies:
   url_launcher: ^6.3.1
   share_plus: ^10.1.2
   path_provider: ^2.1.5
+  connectivity_plus: ^6.0.5
 
 dev_dependencies:
+  sentry_dart_plugin: ^3.2.0
   flutter_test:
     sdk: flutter
   test: ^1.24.0
@@ -35,3 +38,9 @@ flutter:
   assets:
     - assets/data/
     - assets/fonts/
+
+sentry:
+  upload_debug_symbols: true
+  upload_source_maps: true
+  project: flutter_excursion
+  org: spbstu-49

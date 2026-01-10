@@ -52,9 +52,14 @@ class _SellerHomePageState extends ConsumerState<SellerHomePage> {
     return Scaffold(
       appBar: AppBar(
         backgroundColor: appBarColor,
-        title: Text('Организатор экскурсии — ${widget.user.name}'),
+        foregroundColor: Colors.white, // Белый цвет для всех элементов AppBar
+        title: Text(
+          'Организатор экскурсии — ${widget.user.name}',
+          style: const TextStyle(color: Colors.white), // Явно указываем белый цвет
+        ),
         actions: [
           IconButton(
+            color: Colors.white, // Явно указываем белый цвет для иконки
             tooltip: 'Обновить',
             icon: const Icon(Icons.refresh),
             onPressed: () {
@@ -94,8 +99,22 @@ class _ExcursionsTab extends ConsumerStatefulWidget {
   ConsumerState<_ExcursionsTab> createState() => _ExcursionsTabState();
 }
 
-class _ExcursionsTabState extends ConsumerState<_ExcursionsTab> {
+class _ExcursionsTabState extends ConsumerState<_ExcursionsTab>
+    with SingleTickerProviderStateMixin {
   DateTime? _selectedDate;
+  late TabController _tabController;
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 2, vsync: this);
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
 
   Future<void> _selectDate(BuildContext context) async {
     final picked = await showDatePicker(
@@ -124,81 +143,89 @@ class _ExcursionsTabState extends ConsumerState<_ExcursionsTab> {
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (error, _) => _ErrorMessage(message: '$error'),
       data: (items) {
-        // Фильтруем по выбранной дате
-        final filteredItems = _selectedDate == null
-            ? items
-            : items.where((excursion) {
-                final excursionDate = DateTime(
-                  excursion.dateTime.year,
-                  excursion.dateTime.month,
-                  excursion.dateTime.day,
-                );
-                final selectedDateOnly = DateTime(
-                  _selectedDate!.year,
-                  _selectedDate!.month,
-                  _selectedDate!.day,
-                );
-                return excursionDate == selectedDateOnly;
-              }).toList();
+        // Разделяем на предстоящие и прошедшие
+        final now = DateTime.now();
+        final futureItems = <Excursion>[];
+        final pastItems = <Excursion>[];
 
-        final allItems = [...filteredItems]
-          ..sort((a, b) => a.dateTime.compareTo(b.dateTime));
-        if (allItems.isEmpty) {
-          return Column(
-            children: [
-              Padding(
-                padding: const EdgeInsets.all(16),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      'Экскурсии',
-                      style: Theme.of(context).textTheme.titleMedium,
-                    ),
-                    OutlinedButton.icon(
-                      icon: const Icon(Icons.calendar_today, size: 18),
-                      label: Text(
-                        _selectedDate == null
-                            ? 'Выбрать дату'
-                            : DateFormat('dd.MM.yyyy').format(_selectedDate!),
-                      ),
-                      onPressed: () => _selectDate(context),
-                    ),
-                  ],
-                ),
+        for (final excursion in items) {
+          // Сравниваем полную дату и время
+          if (excursion.dateTime.isAfter(now)) {
+            futureItems.add(excursion);
+          } else {
+            // Включаем все экскурсии, которые уже прошли или происходят сейчас
+            pastItems.add(excursion);
+          }
+        }
+
+        // Фильтруем по выбранной дате
+        final filterByDate = (List<Excursion> excursions) {
+          if (_selectedDate == null) return excursions;
+          return excursions.where((excursion) {
+            final excursionDate = DateTime(
+              excursion.dateTime.year,
+              excursion.dateTime.month,
+              excursion.dateTime.day,
+            );
+            final selectedDateOnly = DateTime(
+              _selectedDate!.year,
+              _selectedDate!.month,
+              _selectedDate!.day,
+            );
+            return excursionDate == selectedDateOnly;
+          }).toList();
+        };
+
+        final filteredFutureItems = filterByDate(futureItems);
+        final filteredPastItems = filterByDate(pastItems);
+
+        // Сортируем
+        filteredFutureItems.sort((a, b) => a.dateTime.compareTo(b.dateTime));
+        filteredPastItems.sort((a, b) => b.dateTime.compareTo(a.dateTime));
+
+        // Функция для построения списка экскурсий
+        Widget buildExcursionList(List<Excursion> allItems, String emptyMessage, {bool isPast = false}) {
+          if (allItems.isEmpty) {
+            return Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Text(emptyMessage),
               ),
-              if (_selectedDate != null)
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: TextButton.icon(
-                    icon: const Icon(Icons.clear, size: 18),
-                    label: const Text('Сбросить фильтр'),
-                    onPressed: () {
-                      setState(() {
-                        _selectedDate = null;
-                      });
-                    },
-                  ),
-                ),
-              Expanded(
-                child: Center(
-                  child: Text(
-                    _selectedDate == null
-                        ? 'Нет экскурсий'
-                        : 'Нет экскурсий на выбранную дату',
-                  ),
-                ),
-              ),
-            ],
+            );
+          }
+          final groups = <DateTime, List<Excursion>>{};
+          for (final excursion in allItems) {
+            final key = DateTime(excursion.dateTime.year,
+                excursion.dateTime.month, excursion.dateTime.day);
+            groups.putIfAbsent(key, () => []).add(excursion);
+          }
+          // Для прошедших экскурсий сортируем по убыванию (самые свежие первыми)
+          // Для предстоящих - по возрастанию
+          final sortedDates = groups.keys.toList()
+            ..sort(isPast ? (a, b) => b.compareTo(a) : (a, b) => a.compareTo(b));
+          return RefreshIndicator(
+            onRefresh: () async {
+              ref.invalidate(excursionsFutureProvider);
+              await ref.read(excursionsFutureProvider.future);
+            },
+            child: ListView.builder(
+              padding: const EdgeInsets.all(16),
+              itemCount: sortedDates.length,
+              itemBuilder: (context, index) {
+                final date = sortedDates[index];
+                final dayItems = groups[date]!;
+                return _ExcursionDaySection(
+                  date: dateFormatter.format(date),
+                  excursions: dayItems,
+                  formatter: timeFormatter,
+                  user: user,
+                  index: index,
+                );
+              },
+            ),
           );
         }
-        final groups = <DateTime, List<Excursion>>{};
-        for (final excursion in allItems) {
-          final key = DateTime(excursion.dateTime.year,
-              excursion.dateTime.month, excursion.dateTime.day);
-          groups.putIfAbsent(key, () => []).add(excursion);
-        }
-        final sortedDates = groups.keys.toList()..sort();
+
         return Column(
           children: [
             Padding(
@@ -235,26 +262,32 @@ class _ExcursionsTabState extends ConsumerState<_ExcursionsTab> {
                   },
                 ),
               ),
+            TabBar(
+              controller: _tabController,
+              tabs: const [
+                Tab(text: 'Предстоящие'),
+                Tab(text: 'Прошедшие'),
+              ],
+            ),
             Expanded(
-              child: RefreshIndicator(
-                onRefresh: () async {
-                  ref.invalidate(excursionsFutureProvider);
-                  await ref.read(excursionsFutureProvider.future);
-                },
-                child: ListView.builder(
-                  padding: const EdgeInsets.all(16),
-                  itemCount: sortedDates.length,
-                  itemBuilder: (context, index) {
-                    final date = sortedDates[index];
-                    final dayItems = groups[date]!;
-                    return _ExcursionDaySection(
-                      date: dateFormatter.format(date),
-                      excursions: dayItems,
-                      formatter: timeFormatter,
-                      user: user,
-                    );
-                  },
-                ),
+              child: TabBarView(
+                controller: _tabController,
+                children: [
+                  buildExcursionList(
+                    filteredFutureItems,
+                    _selectedDate == null
+                        ? 'Нет предстоящих экскурсий'
+                        : 'Нет предстоящих экскурсий на выбранную дату',
+                    isPast: false,
+                  ),
+                  buildExcursionList(
+                    filteredPastItems,
+                    _selectedDate == null
+                        ? 'Нет прошедших экскурсий'
+                        : 'Нет прошедших экскурсий на выбранную дату',
+                    isPast: true,
+                  ),
+                ],
               ),
             ),
           ],
@@ -270,17 +303,22 @@ class _ExcursionDaySection extends StatelessWidget {
     required this.excursions,
     required this.formatter,
     required this.user,
+    required this.index,
   });
 
   final String date;
   final List<Excursion> excursions;
   final DateFormat formatter;
   final User user;
+  final int index;
 
   @override
   Widget build(BuildContext context) {
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
+      color: index % 2 == 0 
+          ? Colors.grey.shade50 
+          : Colors.white,
       child: ExpansionTile(
         title: Text(
           date,
@@ -292,13 +330,14 @@ class _ExcursionDaySection extends StatelessWidget {
         subtitle: Text(
             '${excursions.length} ${excursions.length == 1 ? 'экскурсия' : excursions.length < 5 ? 'экскурсии' : 'экскурсий'}'),
         children: [
-          for (final excursion in excursions)
+          for (var i = 0; i < excursions.length; i++)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               child: _ExcursionTile(
-                excursion: excursion,
+                excursion: excursions[i],
                 formatter: formatter,
                 user: user,
+                index: i,
               ),
             ),
         ],
@@ -312,23 +351,30 @@ class _ExcursionTile extends ConsumerWidget {
     required this.excursion,
     required this.formatter,
     required this.user,
+    required this.index,
   });
 
   final Excursion excursion;
   final DateFormat formatter;
   final User user;
+  final int index;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     // Определяем, доступна ли экскурсия для бронирования
     final isAvailable = excursion.availableSeatsCount > 0 && !excursion.isPast;
 
-    // Определяем цвет фона: внеплановые - светло-желтый, недоступные - серый, остальные - по умолчанию
+    // Определяем цвет фона: внеплановые - светло-желтый, недоступные - серый, остальные - чередующийся
     Color? cardColor;
     if (!isAvailable) {
       cardColor = Colors.grey.shade200; // Серый фон для недоступных
     } else if (excursion.isUnscheduled) {
       cardColor = Colors.amber.shade50; // Светло-желтый для внеплановых
+    } else {
+      // Чередующийся фон для четных/нечетных строк
+      cardColor = index % 2 == 0 
+          ? Colors.grey.shade100 
+          : Colors.white;
     }
 
     return Card(
@@ -362,16 +408,16 @@ class _ExcursionTile extends ConsumerWidget {
               ),
             ),
             const SizedBox(width: 4),
-                IconButton(
-              icon: const Icon(Icons.event_seat, size: 20),
-                  tooltip: 'Забронировать',
-              padding: const EdgeInsets.all(8),
-              constraints: const BoxConstraints(),
-                  onPressed: isAvailable ? () => _book(context, ref) : null,
-                  color: isAvailable
-                      ? Theme.of(context).colorScheme.primary
-                      : Colors.grey,
-                ),
+                // IconButton(
+                //   icon: const Icon(Icons.event_seat, size: 20),
+                //       tooltip: 'Забронировать',
+                //   padding: const EdgeInsets.all(8),
+                //       constraints: const BoxConstraints(),
+                //       onPressed: isAvailable ? () => _book(context, ref) : null,
+                //       color: isAvailable
+                //           ? Theme.of(context).colorScheme.primary
+                //           : Colors.grey,
+                //     ),
                 IconButton(
               icon: const Icon(Icons.list, size: 20),
                   tooltip: 'Места',
@@ -401,6 +447,7 @@ class _ExcursionTile extends ConsumerWidget {
         tariffs: excursion.tariffs,
         initialSeatNumbers: preselectedSeats ?? const [],
         lockSeatSelection: (preselectedSeats?.isNotEmpty ?? false),
+        excursionTitle: excursion.title,
       ),
     );
 
@@ -1086,10 +1133,18 @@ class _SellerWalletTabState extends ConsumerState<_SellerWalletTab> {
                     }
                     
                     filteredTransactions = wallet.transactions.where((t) {
-                      if (startDate != null && t.createdAt.isBefore(startDate.subtract(const Duration(seconds: 1)))) {
+                      // Используем дату экскурсии для фильтрации, если есть бронирование
+                      DateTime transactionDate;
+                      if (t.booking != null && t.booking!.excursion.dateTime != null) {
+                        transactionDate = t.booking!.excursion.dateTime;
+                      } else {
+                        transactionDate = t.createdAt;
+                      }
+                      
+                      if (startDate != null && transactionDate.isBefore(startDate.subtract(const Duration(seconds: 1)))) {
                         return false;
                       }
-                      if (endDate != null && t.createdAt.isAfter(endDate.add(const Duration(seconds: 1)))) {
+                      if (endDate != null && transactionDate.isAfter(endDate.add(const Duration(seconds: 1)))) {
                         return false;
                       }
                       return true;
@@ -1103,13 +1158,21 @@ class _SellerWalletTabState extends ConsumerState<_SellerWalletTab> {
                     );
                   }
 
-                  // Группируем транзакции по дате
+                  // Группируем транзакции по дате экскурсии (а не по дате продажи)
                   final groupedTransactions = <DateTime, List<WalletTransactionItem>>{};
                   for (final transaction in filteredTransactions) {
+                    // Используем дату экскурсии, если есть бронирование, иначе дату создания транзакции
+                    DateTime transactionDate;
+                    if (transaction.booking != null && transaction.booking!.excursion.dateTime != null) {
+                      transactionDate = transaction.booking!.excursion.dateTime;
+                    } else {
+                      transactionDate = transaction.createdAt;
+                    }
+                    
                     final date = DateTime(
-                      transaction.createdAt.year,
-                      transaction.createdAt.month,
-                      transaction.createdAt.day,
+                      transactionDate.year,
+                      transactionDate.month,
+                      transactionDate.day,
                     );
                     groupedTransactions.putIfAbsent(date, () => []).add(transaction);
                   }
@@ -1120,13 +1183,24 @@ class _SellerWalletTabState extends ConsumerState<_SellerWalletTab> {
 
                   return Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: sortedDates.map((date) {
+                    children: sortedDates.asMap().entries.map((dateEntry) {
+                      final dateIndex = dateEntry.key;
+                      final date = dateEntry.value;
                       final transactions = groupedTransactions[date]!;
-                      // Сортируем транзакции внутри дня по времени (новые первыми)
-                      transactions.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+                      // Сортируем транзакции внутри дня по дате экскурсии (новые первыми)
+                      transactions.sort((a, b) {
+                        DateTime dateA = a.booking?.excursion.dateTime ?? a.createdAt;
+                        DateTime dateB = b.booking?.excursion.dateTime ?? b.createdAt;
+                        return dateB.compareTo(dateA);
+                      });
                       final isExpanded = _expandedDates.contains(date);
                       
-                      return ExpansionTile(
+                      return Card(
+                        margin: const EdgeInsets.only(bottom: 8),
+                        color: dateIndex % 2 == 0 
+                            ? Colors.grey.shade50 
+                            : Colors.white,
+                        child: ExpansionTile(
                         initiallyExpanded: isExpanded,
                         onExpansionChanged: (expanded) {
                           setState(() {
@@ -1149,35 +1223,83 @@ class _SellerWalletTabState extends ConsumerState<_SellerWalletTab> {
                                     .primary,
                               ),
                         ),
-                        children: transactions.map(
-                          (transaction) => ListTile(
-                            leading: CircleAvatar(
-                              backgroundColor: transaction.amount >= 0
-                                  ? Colors.green.shade100
-                                  : Colors.red.shade100,
-                              child: Icon(
-                                transaction.amount >= 0
-                                    ? Icons.arrow_downward
-                                    : Icons.arrow_upward,
-                                color: transaction.amount >= 0
-                                    ? Colors.green
-                                    : Colors.red,
+                        children: transactions.asMap().entries.map(
+                          (entry) {
+                            final transaction = entry.value;
+                            final index = entry.key;
+                            return Container(
+                              margin: const EdgeInsets.only(bottom: 4),
+                              color: index % 2 == 0 
+                                  ? Colors.grey.shade100 
+                                  : Colors.white,
+                              child: ExpansionTile(
+                              leading: CircleAvatar(
+                                backgroundColor: transaction.amount >= 0
+                                    ? Colors.green.shade100
+                                    : Colors.red.shade100,
+                                child: Icon(
+                                  transaction.amount >= 0
+                                      ? Icons.arrow_downward
+                                      : Icons.arrow_upward,
+                                  color: transaction.amount >= 0
+                                      ? Colors.green
+                                      : Colors.red,
+                                ),
                               ),
-                            ),
-                            title: Text(
-                              '${transaction.cleanedDescription} ${DateFormat('HH:mm').format(transaction.createdAt)}',
-                            ),
-                            trailing: Text(
-                              '${transaction.amount.toStringAsFixed(2)} ₽',
-                              style: TextStyle(
-                                color: transaction.amount >= 0
-                                    ? Colors.green
-                                    : Colors.red,
-                                fontWeight: FontWeight.w500,
+                              title: Text(
+                                transaction.cleanedDescription,
+                                style: Theme.of(context).textTheme.bodyMedium,
                               ),
-                            ),
-                          ),
+                              subtitle: Text(
+                                DateFormat('dd.MM.yyyy HH:mm').format(transaction.createdAt),
+                                style: Theme.of(context).textTheme.bodySmall,
+                              ),
+                              trailing: Text(
+                                '${transaction.amount.toStringAsFixed(2)} ₽',
+                                style: TextStyle(
+                                  color: transaction.amount >= 0
+                                      ? Colors.green
+                                      : Colors.red,
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 16,
+                                ),
+                              ),
+                              children: transaction.booking != null ? [
+                                ListTile(
+                                  title: Text(
+                                    'Бронирование',
+                                    style: Theme.of(context).textTheme.titleSmall,
+                                  ),
+                                  subtitle: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      const SizedBox(height: 8),
+                                      Text(
+                                        'Экскурсия: ${transaction.booking!.excursion.title}',
+                                      ),
+                                      if (transaction.booking!.excursion.dateTime != null) ...[
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          'Дата: ${formatter.format(transaction.booking!.excursion.dateTime)}',
+                                        ),
+                                      ],
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        'Клиент: ${transaction.booking!.customerName}',
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        'Сумма бронирования: ${transaction.booking!.price.toStringAsFixed(2)} ₽',
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ] : [],
+                              ),
+                            );
+                          },
                         ).toList(),
+                        ),
                       );
                     }).toList(),
                   );
@@ -1287,23 +1409,52 @@ class _SellerWalletTabState extends ConsumerState<_SellerWalletTab> {
                           ),
                         ...filteredBookings
                             .map(
-                              (booking) => ListTile(
-                                title: Text(booking.excursion.title),
-                                subtitle: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
+                              (booking) => Card(
+                                margin: const EdgeInsets.only(bottom: 8),
+                                child: ExpansionTile(
+                                  title: Text(
+                                    formatter.format(booking.excursion.dateTime),
+                                    style: Theme.of(context).textTheme.titleMedium,
+                                  ),
+                                  subtitle: Text(
+                                    'Продажа: ${formatter.format(booking.bookedAt)}',
+                                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                      color: Colors.grey,
+                                    ),
+                                  ),
+                                  trailing: Text(
+                                    '${booking.price.toStringAsFixed(2)} ₽',
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .titleMedium
+                                        ?.copyWith(color: Colors.green),
+                                  ),
                                   children: [
-                                    Text(
-                                      formatter
-                                          .format(booking.excursion.dateTime),
+                                    ListTile(
+                                      title: Text(booking.excursion.title),
+                                      subtitle: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          const SizedBox(height: 8),
+                                          Text(
+                                            'Дата экскурсии: ${formatter.format(booking.excursion.dateTime)}',
+                                            style: Theme.of(context).textTheme.bodyMedium,
+                                          ),
+                                          const SizedBox(height: 4),
+                                          Text(
+                                            'Дата продажи: ${formatter.format(booking.bookedAt)}',
+                                            style: Theme.of(context).textTheme.bodyMedium,
+                                          ),
+                                          const SizedBox(height: 4),
+                                          Text(
+                                            '${booking.customerName} • ${booking.customerPhone}',
+                                          ),
+                                          const SizedBox(height: 4),
+                                          Text(booking.passengerType.label),
+                                        ],
+                                      ),
                                     ),
-                                    Text(
-                                      '${booking.customerName} • ${booking.customerPhone}',
-                                    ),
-                                    Text(booking.passengerType.label),
                                   ],
-                                ),
-                                trailing: Text(
-                                  '${booking.price.toStringAsFixed(2)} ₽',
                                 ),
                               ),
                             )
@@ -1624,101 +1775,222 @@ class _ScheduleTab extends ConsumerWidget {
         return RefreshIndicator(
           onRefresh: () async {
             ref.invalidate(scheduleFutureProvider);
+            ref.invalidate(excursionsFutureProvider);
           },
-          child: ListView.builder(
+          child: ListView(
             padding: const EdgeInsets.all(16),
-            itemCount: templates.length,
-            itemBuilder: (context, index) {
-              final template = templates[index];
-              return Card(
-                margin: const EdgeInsets.only(bottom: 12),
-                child: ExpansionTile(
-                  leading: const Icon(Icons.calendar_today),
-                  title: Text(
-                    template.title,
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                  subtitle: template.description.isNotEmpty
-                      ? Text(
-                          template.description,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        )
-                      : null,
-                  children: [
-                    if (template.description.isNotEmpty) ...[
-                      Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 8,
-                        ),
-                        child: Text(
-                          template.description,
-                          style: Theme.of(context).textTheme.bodyMedium,
-                        ),
-                      ),
-                      const Divider(),
-                    ],
-                    Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Расписание по дням недели:',
-                            style: Theme.of(context).textTheme.titleSmall,
+            children: [
+              ...templates.map((template) {
+                return Card(
+                  margin: const EdgeInsets.only(bottom: 12),
+                  child: ExpansionTile(
+                    leading: const Icon(Icons.calendar_today),
+                    title: Text(
+                      template.title,
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    subtitle: template.description.isNotEmpty
+                        ? Text(
+                            template.description,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          )
+                        : null,
+                    children: [
+                      if (template.description.isNotEmpty) ...[
+                        Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 8,
                           ),
-                          const SizedBox(height: 8),
-                          if (template.schedule.isEmpty)
-                            const Text(
-                              'Расписание не задано',
-                              style: TextStyle(
-                                fontStyle: FontStyle.italic,
-                                color: Colors.grey,
-                              ),
-                            )
-                          else
-                            ...template.schedule.map((day) {
-                              return Padding(
-                                padding:
-                                    const EdgeInsets.symmetric(vertical: 4),
-                                child: Row(
-                                  children: [
-                                    SizedBox(
-                                      width: 120,
-                                      child: Text(
-                                        day.dayName,
+                          child: Text(
+                            template.description,
+                            style: Theme.of(context).textTheme.bodyMedium,
+                          ),
+                        ),
+                        const Divider(),
+                      ],
+                      Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Расписание по дням недели:',
+                              style: Theme.of(context).textTheme.titleSmall,
+                            ),
+                            const SizedBox(height: 8),
+                            if (template.schedule.isEmpty)
+                              const Text(
+                                'Расписание не задано',
+                                style: TextStyle(
+                                  fontStyle: FontStyle.italic,
+                                  color: Colors.grey,
+                                ),
+                              )
+                            else
+                              ...template.schedule.map((day) {
+                                return Padding(
+                                  padding:
+                                      const EdgeInsets.symmetric(vertical: 4),
+                                  child: Row(
+                                    children: [
+                                      SizedBox(
+                                        width: 120,
+                                        child: Text(
+                                          day.dayName,
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .bodyMedium
+                                              ?.copyWith(
+                                                fontWeight: FontWeight.w500,
+                                              ),
+                                        ),
+                                      ),
+                                      Text(
+                                        day.time,
                                         style: Theme.of(context)
                                             .textTheme
                                             .bodyMedium
                                             ?.copyWith(
-                                              fontWeight: FontWeight.w500,
+                                              color: Theme.of(context)
+                                                  .colorScheme
+                                                  .primary,
+                                              fontWeight: FontWeight.bold,
                                             ),
                                       ),
-                                    ),
-                                    Text(
-                                      day.time,
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .bodyMedium
-                                          ?.copyWith(
-                                            color: Theme.of(context)
-                                                .colorScheme
-                                                .primary,
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                    ),
-                                  ],
-                                ),
-                              );
-                            }),
-                        ],
+                                    ],
+                                  ),
+                                );
+                              }),
+                          ],
+                        ),
                       ),
-                    ),
-                  ],
-                ),
-              );
-            },
+                    ],
+                  ),
+                );
+              }),
+              // Раздел "Внеплановые"
+              Consumer(
+                builder: (context, ref, _) {
+                  final excursionsAsync = ref.watch(excursionsFutureProvider);
+                  return excursionsAsync.when(
+                    loading: () => const SizedBox.shrink(),
+                    error: (_, __) => const SizedBox.shrink(),
+                    data: (excursions) {
+                      // Собираем все внеплановые экскурсии
+                      final now = DateTime.now();
+                      final unscheduledExcursions = excursions
+                          .where((e) => e.isUnscheduled && !e.isDeleted)
+                          .toList();
+                      
+                      if (unscheduledExcursions.isEmpty) {
+                        return const SizedBox.shrink();
+                      }
+                      
+                      // Разделяем на прошедшие и будущие
+                      final pastExcursions = unscheduledExcursions
+                          .where((e) => e.dateTime.isBefore(now))
+                          .toList();
+                      final futureExcursions = unscheduledExcursions
+                          .where((e) => !e.dateTime.isBefore(now))
+                          .toList();
+                      
+                      // Группируем по экскурсиям (для будущих)
+                      final groupedByTitleFuture = <String, List<Excursion>>{};
+                      for (final excursion in futureExcursions) {
+                        if (!groupedByTitleFuture.containsKey(excursion.title)) {
+                          groupedByTitleFuture[excursion.title] = [];
+                        }
+                        groupedByTitleFuture[excursion.title]!.add(excursion);
+                      }
+                      
+                      // Группируем по экскурсиям (для прошедших)
+                      final groupedByTitlePast = <String, List<Excursion>>{};
+                      for (final excursion in pastExcursions) {
+                        if (!groupedByTitlePast.containsKey(excursion.title)) {
+                          groupedByTitlePast[excursion.title] = [];
+                        }
+                        groupedByTitlePast[excursion.title]!.add(excursion);
+                      }
+                      
+                      return Card(
+                        margin: const EdgeInsets.fromLTRB(0, 0, 0, 16),
+                        color: Colors.amber.shade50,
+                        child: ExpansionTile(
+                          leading: const Icon(Icons.event_busy, color: Colors.amber),
+                          title: const Text(
+                            'Внеплановые',
+                            style: TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                          subtitle: Text('${futureExcursions.length} ${futureExcursions.length == 1 ? 'экскурсия' : futureExcursions.length < 5 ? 'экскурсии' : 'экскурсий'}${pastExcursions.isNotEmpty ? ' (${pastExcursions.length} прошедших)' : ''}'),
+                          children: [
+                            // Будущие экскурсии
+                            if (groupedByTitleFuture.isNotEmpty) ...[
+                              const Padding(
+                                padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                child: Text(
+                                  'Будущие',
+                                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                                ),
+                              ),
+                              ...groupedByTitleFuture.entries.map((entry) {
+                                final title = entry.key;
+                                final dates = entry.value;
+                                dates.sort((a, b) => a.dateTime.compareTo(b.dateTime));
+                                
+                                return ExpansionTile(
+                                  title: Text(title),
+                                  children: dates.map((excursion) {
+                                    return ListTile(
+                                      title: Text(
+                                        DateFormat('dd.MM.yyyy HH:mm').format(excursion.dateTime),
+                                      ),
+                                      subtitle: Text(
+                                        'Мест: ${excursion.availableSeatsCount}/${excursion.maxSeats}',
+                                      ),
+                                    );
+                                  }).toList(),
+                                );
+                              }),
+                            ],
+                            // Прошедшие экскурсии
+                            if (groupedByTitlePast.isNotEmpty) ...[
+                              const Padding(
+                                padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                child: Text(
+                                  'Прошедшие',
+                                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                                ),
+                              ),
+                              ...groupedByTitlePast.entries.map((entry) {
+                                final title = entry.key;
+                                final dates = entry.value;
+                                dates.sort((a, b) => b.dateTime.compareTo(a.dateTime)); // Сортируем по убыванию
+                                
+                                return ExpansionTile(
+                                  title: Text(title),
+                                  children: dates.map((excursion) {
+                                    return ListTile(
+                                      title: Text(
+                                        DateFormat('dd.MM.yyyy HH:mm').format(excursion.dateTime),
+                                      ),
+                                      subtitle: Text(
+                                        'Мест: ${excursion.availableSeatsCount}/${excursion.maxSeats}',
+                                      ),
+                                    );
+                                  }).toList(),
+                                );
+                              }),
+                            ],
+                          ],
+                        ),
+                      );
+                    },
+                  );
+                },
+              ),
+            ],
           ),
         );
       },

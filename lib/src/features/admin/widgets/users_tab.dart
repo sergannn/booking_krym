@@ -199,12 +199,18 @@ class _UsersTabState extends ConsumerState<UsersTab>
                       onSelected: (action) {
                         if (action == _UserAction.delete) {
                           _deleteUser(context, user);
+                        } else if (action == _UserAction.setColor) {
+                          _setUserColor(context, user);
                         }
                       },
                       itemBuilder: (context) => [
                         const PopupMenuItem(
+                          value: _UserAction.setColor,
+                          child: Text('Назначить цвет'),
+                        ),
+                        const PopupMenuItem(
                           value: _UserAction.delete,
-                          child: Text('Удалить'),
+                          child: Text('Удалить.'),
                         ),
                       ],
                     ),
@@ -274,9 +280,45 @@ class _UsersTabState extends ConsumerState<UsersTab>
       );
     }
   }
+
+  Future<void> _setUserColor(BuildContext context, UserSummary user) async {
+    final selectedColor = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => _ColorPickerDialog(
+        currentColor: user.color,
+        userName: user.name,
+      ),
+    );
+
+    if (selectedColor == null) {
+      return;
+    }
+
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await ref.read(usersRepositoryProvider).updateUserColor(
+            user.id,
+            selectedColor.isEmpty ? null : selectedColor,
+          );
+      ref.invalidate(allUsersFutureProvider);
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            selectedColor.isEmpty
+                ? 'Цвет пользователя "${user.name}" удалён'
+                : 'Цвет пользователя "${user.name}" обновлён',
+          ),
+        ),
+      );
+    } catch (error) {
+      messenger.showSnackBar(
+        SnackBar(content: Text('Не удалось обновить цвет: $error')),
+      );
+    }
+  }
 }
 
-enum _UserAction { delete }
+enum _UserAction { delete, setColor }
 
 class _UsersError extends StatelessWidget {
   const _UsersError({required this.message});
@@ -507,5 +549,133 @@ class _CreateUserDialogState extends ConsumerState<_CreateUserDialog> {
       (_) => alphabet.codeUnitAt(random.nextInt(alphabet.length)),
     );
     return String.fromCharCodes(codeUnits);
+  }
+}
+
+class _ColorPickerDialog extends StatefulWidget {
+  const _ColorPickerDialog({
+    required this.currentColor,
+    required this.userName,
+  });
+
+  final String? currentColor;
+  final String userName;
+
+  @override
+  State<_ColorPickerDialog> createState() => _ColorPickerDialogState();
+}
+
+class _ColorPickerDialogState extends State<_ColorPickerDialog> {
+  String? _selectedColor;
+
+  // Предустановленные цвета
+  static const List<String> _presetColors = [
+    '#FF5733', // Красный
+    '#33FF57', // Зеленый
+    '#3357FF', // Синий
+    '#FF33F5', // Розовый
+    '#F5FF33', // Желтый
+    '#33FFF5', // Голубой
+    '#FF8C33', // Оранжевый
+    '#8C33FF', // Фиолетовый
+    '#33FF8C', // Мятный
+    '#FF338C', // Малиновый
+    '#8CFF33', // Лайм
+    '#338CFF', // Небесно-голубой
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedColor = widget.currentColor;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text('Выбрать цвет для "${widget.userName}"'),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Предустановленные цвета:'),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: _presetColors.map((color) {
+                final isSelected = _selectedColor == color;
+                return InkWell(
+                  onTap: () => setState(() => _selectedColor = color),
+                  child: Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      color: _parseColor(color),
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: isSelected
+                            ? Colors.black
+                            : Colors.grey.shade300,
+                        width: isSelected ? 3 : 1,
+                      ),
+                    ),
+                    child: isSelected
+                        ? const Icon(Icons.check, color: Colors.white)
+                        : null,
+                  ),
+                );
+              }).toList(),
+            ),
+            const SizedBox(height: 16),
+            const Text('Или введите HEX цвет:'),
+            const SizedBox(height: 8),
+            TextField(
+              decoration: InputDecoration(
+                hintText: '#FF5733',
+                prefixText: '#',
+                border: const OutlineInputBorder(),
+              ),
+              maxLength: 6,
+              onChanged: (value) {
+                if (value.isNotEmpty && value.length == 6) {
+                  setState(() => _selectedColor = '#$value');
+                } else if (value.isEmpty) {
+                  setState(() => _selectedColor = null);
+                }
+              },
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                TextButton(
+                  onPressed: () => setState(() => _selectedColor = null),
+                  child: const Text('Убрать цвет'),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Отмена'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(context).pop(_selectedColor ?? ''),
+          child: const Text('Сохранить'),
+        ),
+      ],
+    );
+  }
+
+  Color _parseColor(String hexColor) {
+    try {
+      return Color(int.parse(hexColor.substring(1), radix: 16) + 0xFF000000);
+    } catch (e) {
+      return Colors.grey;
+    }
   }
 }

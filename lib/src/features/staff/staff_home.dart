@@ -35,6 +35,9 @@ class StaffHomePage extends ConsumerStatefulWidget {
 }
 
 class _StaffHomePageState extends ConsumerState<StaffHomePage> {
+  DateTime? _selectedDateFrom;
+  DateTime? _selectedDateTo;
+
   @override
   void initState() {
     super.initState();
@@ -86,19 +89,25 @@ class _StaffHomePageState extends ConsumerState<StaffHomePage> {
     final scaffold = Scaffold(
       appBar: AppBar(
         backgroundColor: appBarColor,
-        title: Text(appBarTitle),
+        foregroundColor: Colors.white, // Белый цвет для всех элементов AppBar
+        title: Text(
+          appBarTitle,
+          style: const TextStyle(color: Colors.white), // Явно указываем белый цвет
+        ),
         bottom: showTabs
-            ? const TabBar(
-                tabs: [
+            ? TabBar(
+                tabs: const [
                   Tab(text: 'Предстоящие'),
                   Tab(text: 'Прошедшие'),
                 ],
+                labelColor: Colors.white,
+                unselectedLabelColor: Colors.white70,
               )
             : null,
         actions: [
           IconButton(
             tooltip: 'Выйти',
-            icon: const Icon(Icons.logout),
+            icon: const Icon(Icons.logout, color: Colors.white), // Явно указываем белый цвет
             onPressed: () =>
                 ref.read(authControllerProvider.notifier).signOut(),
           ),
@@ -112,10 +121,46 @@ class _StaffHomePageState extends ConsumerState<StaffHomePage> {
               loading: () => const SizedBox.shrink(),
               error: (_, __) => const SizedBox.shrink(),
               data: (profitData) {
-                final totalProfit =
-                    profitData['total_profit'] as double? ?? 0.0;
                 final breakdown =
                     profitData['breakdown'] as List<dynamic>? ?? [];
+                
+                // Фильтруем breakdown по датам
+                List<dynamic> filteredBreakdown = breakdown;
+                if (_selectedDateFrom != null || _selectedDateTo != null) {
+                  filteredBreakdown = breakdown.where((item) {
+                    final dateTime = item['date_time'] as String?;
+                    if (dateTime == null || dateTime.isEmpty) {
+                      return false;
+                    }
+                    try {
+                      final date = DateTime.parse(dateTime);
+                      final dateOnly = DateTime(date.year, date.month, date.day);
+                      
+                      if (_selectedDateFrom != null) {
+                        final fromDate = DateTime(_selectedDateFrom!.year, _selectedDateFrom!.month, _selectedDateFrom!.day);
+                        if (dateOnly.isBefore(fromDate)) {
+                          return false;
+                        }
+                      }
+                      if (_selectedDateTo != null) {
+                        final toDate = DateTime(_selectedDateTo!.year, _selectedDateTo!.month, _selectedDateTo!.day).add(const Duration(days: 1));
+                        if (dateOnly.isAfter(toDate.subtract(const Duration(seconds: 1)))) {
+                          return false;
+                        }
+                      }
+                      return true;
+                    } catch (e) {
+                      return false;
+                    }
+                  }).toList();
+                }
+                
+                // Пересчитываем общую прибыль для отфильтрованных данных
+                double filteredTotalProfit = filteredBreakdown.fold<double>(
+                  0.0,
+                  (sum, item) => sum + ((item['profit'] as num?)?.toDouble() ?? 0.0),
+                );
+                
                 return Container(
                   width: double.infinity,
                   padding: const EdgeInsets.all(16),
@@ -123,25 +168,119 @@ class _StaffHomePageState extends ConsumerState<StaffHomePage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      // Фильтр по датам
+                      Card(
+                        child: Padding(
+                          padding: const EdgeInsets.all(12),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Фильтр по датам',
+                                style: Theme.of(context).textTheme.titleSmall,
+                              ),
+                              const SizedBox(height: 8),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: OutlinedButton.icon(
+                                      icon: const Icon(Icons.calendar_today, size: 18),
+                                      label: Text(
+                                        _selectedDateFrom != null
+                                            ? DateFormat('dd.MM.yyyy', 'ru_RU').format(_selectedDateFrom!)
+                                            : 'От',
+                                        style: const TextStyle(fontSize: 12),
+                                      ),
+                                      onPressed: () async {
+                                        final picked = await showDatePicker(
+                                          context: context,
+                                          initialDate: _selectedDateFrom ?? DateTime.now(),
+                                          firstDate: DateTime(2020),
+                                          lastDate: DateTime(2100),
+                                        );
+                                        if (picked != null) {
+                                          setState(() {
+                                            _selectedDateFrom = picked;
+                                          });
+                                        }
+                                      },
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: OutlinedButton.icon(
+                                      icon: const Icon(Icons.calendar_today, size: 18),
+                                      label: Text(
+                                        _selectedDateTo != null
+                                            ? DateFormat('dd.MM.yyyy', 'ru_RU').format(_selectedDateTo!)
+                                            : 'До',
+                                        style: const TextStyle(fontSize: 12),
+                                      ),
+                                      onPressed: () async {
+                                        final picked = await showDatePicker(
+                                          context: context,
+                                          initialDate: _selectedDateTo ?? DateTime.now(),
+                                          firstDate: _selectedDateFrom ?? DateTime(2020),
+                                          lastDate: DateTime(2100),
+                                        );
+                                        if (picked != null) {
+                                          setState(() {
+                                            _selectedDateTo = picked;
+                                          });
+                                        }
+                                      },
+                                    ),
+                                  ),
+                                  if (_selectedDateFrom != null || _selectedDateTo != null)
+                                    IconButton(
+                                      icon: const Icon(Icons.clear, size: 20),
+                                      onPressed: () {
+                                        setState(() {
+                                          _selectedDateFrom = null;
+                                          _selectedDateTo = null;
+                                        });
+                                      },
+                                    ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
                       Text(
                         'Общая прибыль',
                         style: Theme.of(context).textTheme.titleSmall,
                       ),
+                      if (_selectedDateFrom != null || _selectedDateTo != null)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 4),
+                          child: Text(
+                            _selectedDateFrom != null && _selectedDateTo != null
+                                ? '${DateFormat('dd.MM.yyyy', 'ru_RU').format(_selectedDateFrom!)} - ${DateFormat('dd.MM.yyyy', 'ru_RU').format(_selectedDateTo!)}'
+                                : _selectedDateFrom != null
+                                    ? 'С ${DateFormat('dd.MM.yyyy', 'ru_RU').format(_selectedDateFrom!)}'
+                                    : 'До ${DateFormat('dd.MM.yyyy', 'ru_RU').format(_selectedDateTo!)}',
+                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: Colors.grey.shade700,
+                            ),
+                          ),
+                        ),
                       const SizedBox(height: 4),
                       Text(
-                        '${totalProfit.toStringAsFixed(2)} ₽',
+                        '${filteredTotalProfit.toStringAsFixed(2)} ₽',
                         style:
                             Theme.of(context).textTheme.headlineSmall?.copyWith(
                                   color: Colors.green.shade700,
                                   fontWeight: FontWeight.bold,
                                 ),
                       ),
-                      if (breakdown.isNotEmpty) ...[
+                      if (filteredBreakdown.isNotEmpty) ...[
                         const SizedBox(height: 12),
                         ExpansionTile(
                           title: const Text('Детализация прибыли'),
                           children: [
-                            ...breakdown.map((item) {
+                            ...filteredBreakdown.map((item) {
                               final excursionTitle =
                                   item['excursion_title'] as String? ?? '';
                               final profit =
@@ -250,6 +389,7 @@ class _StaffHomePageState extends ConsumerState<StaffHomePage> {
                                     const SizedBox(height: 16),
                                     _ProfitDetails(
                                       excursionId: excursion.id,
+                                      excursionDate: excursion.dateTime,
                                       profitData: profitData,
                                     ),
                                   ],
@@ -343,14 +483,6 @@ class _StaffHomePageState extends ConsumerState<StaffHomePage> {
                                     ],
                                   ),
                               const SizedBox(height: 16),
-                              const Text(
-                                'Рассадка:',
-                                style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              _SeatsGrid(busSeats: excursion.busSeats),
                                 ],
                               ),
                             ),
@@ -434,26 +566,81 @@ class _SeatsGrid extends StatelessWidget {
         if (hasBooking && booking.customerName.isNotEmpty) {
           label.write(' — ${booking.customerName}');
         }
+        
+        // Добавляем информацию о продавце
+        final sellerInfo = <String>[];
+        if (seat.bookedByInfo != null) {
+          sellerInfo.add('${seat.bookedByInfo!.name}');
+        }
+        
+        // Преобразуем тип пассажира на русский
+        String passengerTypeText = '';
+        if (hasBooking && booking.passengerType.isNotEmpty) {
+          final type = booking.passengerType.toLowerCase();
+          switch (type) {
+            case 'adult':
+              passengerTypeText = 'Взрослый';
+              break;
+            case 'child':
+              passengerTypeText = 'Детский';
+              break;
+            case 'senior':
+              passengerTypeText = 'Пенсионер';
+              break;
+            case 'disabled':
+              passengerTypeText = 'Инвалид';
+              break;
+            case 'special':
+              passengerTypeText = 'Спеццена';
+              break;
+            case 'concession':
+              passengerTypeText = 'Льготный';
+              break;
+            default:
+              passengerTypeText = booking.passengerType;
+          }
+        }
+        
         final subtitle = hasBooking
             ? [
-                if (booking.passengerType.isNotEmpty) booking.passengerType,
+                if (passengerTypeText.isNotEmpty) passengerTypeText,
                 if (booking.stopTitle?.isNotEmpty ?? false)
-                  'Остановка: ${booking.stopTitle}',
+                  booking.stopTitle!,
                 if (booking.customerPhone.isNotEmpty) booking.customerPhone,
+                ...sellerInfo,
               ].where((e) => e.isNotEmpty).join('\n')
-            : (seat.status == 'available' ? 'Свободно' : 'Занято');
+            : (seat.status == 'available' 
+                ? 'Свободно' 
+                : (seat.bookedByInfo != null && seat.bookedByInfo!.name.isNotEmpty
+                    ? seat.bookedByInfo!.name
+                    : 'Занято'));
 
-        final color = hasBooking
-            ? Colors.blue.shade100
-            : seat.status == 'available'
-                ? Colors.green.shade100
-                : Colors.red.shade100;
+        // Используем цвет продавца, если он есть, иначе стандартные цвета
+        Color seatColor;
+        if (seat.bookedByInfo?.color != null && seat.bookedByInfo!.color!.isNotEmpty) {
+          try {
+            final hexColor = seat.bookedByInfo!.color!;
+            seatColor = Color(int.parse(hexColor.substring(1), radix: 16) + 0xFF000000);
+          } catch (e) {
+            seatColor = hasBooking
+                ? Colors.blue.shade100
+                : seat.status == 'available'
+                    ? Colors.green.shade100
+                    : Colors.red.shade100;
+          }
+        } else {
+          seatColor = hasBooking
+              ? Colors.blue.shade100
+              : seat.status == 'available'
+                  ? Colors.green.shade100
+                  : Colors.red.shade100;
+        }
 
         return Container(
           width: 140,
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
           decoration: BoxDecoration(
-            color: color,
+            color: seatColor,
             borderRadius: BorderRadius.circular(8),
             border: Border.all(color: Colors.grey.shade300),
           ),
@@ -520,10 +707,12 @@ class _BookedStopsFromSeats extends StatelessWidget {
 class _ProfitDetails extends StatelessWidget {
   const _ProfitDetails({
     required this.excursionId,
+    required this.excursionDate,
     required this.profitData,
   });
 
   final int excursionId;
+  final DateTime excursionDate;
   final Map<String, dynamic>? profitData;
 
   @override
@@ -533,8 +722,39 @@ class _ProfitDetails extends StatelessWidget {
     }
 
     final breakdown = profitData!['breakdown'] as List<dynamic>? ?? [];
+    // Ищем запись не только по excursion_id, но и по дате экскурсии
+    // Для одной экскурсии может быть несколько записей (по разным датам)
     final item = breakdown.firstWhere(
-      (e) => (e['excursion_id'] as int?) == excursionId,
+      (e) {
+        final eId = e['excursion_id'] as int?;
+        if (eId != excursionId) return false;
+        
+        // Проверяем дату
+        final dateTimeStr = e['date_time'] as String?;
+        if (dateTimeStr == null || dateTimeStr.isEmpty) return false;
+        
+        try {
+          final itemDate = DateTime.parse(dateTimeStr);
+          // Сравниваем дату и время (без секунд и миллисекунд)
+          final excursionDateOnly = DateTime(
+            excursionDate.year,
+            excursionDate.month,
+            excursionDate.day,
+            excursionDate.hour,
+            excursionDate.minute,
+          );
+          final itemDateOnly = DateTime(
+            itemDate.year,
+            itemDate.month,
+            itemDate.day,
+            itemDate.hour,
+            itemDate.minute,
+          );
+          return excursionDateOnly == itemDateOnly;
+        } catch (e) {
+          return false;
+        }
+      },
       orElse: () => null,
     );
 

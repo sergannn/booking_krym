@@ -161,4 +161,94 @@ class ExcursionsRepository {
 
     return Excursion.fromJson(data);
   }
+
+  Future<Excursion> deleteUnscheduledDate({
+    required int excursionId,
+    required int dateId,
+  }) async {
+    final response = await _client.deleteJson(
+      '/api/excursions/$excursionId/unscheduled-date/$dateId',
+      authenticated: true,
+    );
+
+    final data = response['data'] as Map<String, dynamic>?;
+    if (data == null) {
+      throw const FormatException(
+          'Неверный ответ сервера при удалении внеплановой даты');
+    }
+
+    return Excursion.fromJson(data);
+  }
+
+  Future<List<CancelledExcursionDate>> fetchCancelledDates() async {
+    final response = await _client.getJson(
+      '/api/excursions/cancelled-dates',
+      authenticated: true,
+    );
+
+    final data = response['data'] as List<dynamic>?;
+    if (data == null) {
+      return const [];
+    }
+
+    return data
+        .map((json) => CancelledExcursionDate.fromJson(
+            json as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<void> cancelExcursionDate({
+    required int excursionId,
+    required DateTime dateTime,
+  }) async {
+    await _client.postJson(
+      '/api/excursions/$excursionId/cancel-date',
+      authenticated: true,
+      body: {
+        'date_time': dateTime.toIso8601String(),
+      },
+    );
+  }
+
+  Future<void> restoreExcursionDate({
+    required int excursionId,
+    required int cancelledDateId,
+  }) async {
+    await _client.deleteJson(
+      '/api/excursions/$excursionId/cancel-date/$cancelledDateId',
+      authenticated: true,
+    );
+  }
+}
+
+class CancelledExcursionDate {
+  CancelledExcursionDate({
+    required this.id,
+    required this.excursionId,
+    required this.excursionTitle,
+    required this.dateTime,
+    required this.date,
+    required this.time,
+    required this.createdAt,
+  });
+
+  final int id;
+  final int excursionId;
+  final String excursionTitle;
+  final DateTime dateTime;
+  final String date;
+  final String time;
+  final DateTime createdAt;
+
+  factory CancelledExcursionDate.fromJson(Map<String, dynamic> json) {
+    return CancelledExcursionDate(
+      id: json['id'] as int,
+      excursionId: json['excursion_id'] as int,
+      excursionTitle: json['excursion_title'] as String,
+      dateTime: DateTime.parse(json['date_time'] as String),
+      date: json['date'] as String,
+      time: json['time'] as String,
+      createdAt: DateTime.parse(json['created_at'] as String),
+    );
+  }
 }

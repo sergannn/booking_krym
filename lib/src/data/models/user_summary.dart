@@ -7,6 +7,7 @@ class UserSummary {
     required this.roleId,
     required this.balance,
     this.password,
+    this.color,
   });
 
   final int id;
@@ -16,6 +17,7 @@ class UserSummary {
   final int roleId;
   final double balance;
   final String? password;
+  final String? color; // HEX цвет, например #FF5733
 
   factory UserSummary.fromJson(Map<String, dynamic> json) {
     String roleName = 'Unknown';
@@ -40,6 +42,7 @@ class UserSummary {
       roleId: roleId,
       balance: double.tryParse(json['balance']?.toString() ?? '0') ?? 0,
       password: json['password'] as String?,
+      color: json['color'] as String?,
     );
   }
 }

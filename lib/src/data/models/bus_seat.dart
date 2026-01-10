@@ -6,6 +6,7 @@ class BusSeat {
     this.bookedBy,
     this.bookedAt,
     this.booking,
+    this.bookedByInfo,
   });
 
   final int id;
@@ -14,6 +15,7 @@ class BusSeat {
   final int? bookedBy;
   final DateTime? bookedAt;
   final BusSeatBooking? booking;
+  final BusSeatBookedByInfo? bookedByInfo; // Информация о том, кто забронировал
 
   factory BusSeat.fromJson(Map<String, dynamic> json) {
     return BusSeat(
@@ -27,6 +29,9 @@ class BusSeat {
       booking: json['booking'] == null
           ? null
           : BusSeatBooking.fromJson(json['booking'] as Map<String, dynamic>),
+      bookedByInfo: json['booked_by_info'] == null
+          ? null
+          : BusSeatBookedByInfo.fromJson(json['booked_by_info'] as Map<String, dynamic>),
     );
   }
 }
@@ -56,6 +61,26 @@ class BusSeatBooking {
       stopId: (json['stop_id'] as num?)?.toInt(),
       stopTitle: json['stop_title'] as String?,
       stopOrder: (json['stop_order'] as num?)?.toInt(),
+    );
+  }
+}
+
+class BusSeatBookedByInfo {
+  const BusSeatBookedByInfo({
+    required this.id,
+    required this.name,
+    this.color,
+  });
+
+  final int id;
+  final String name;
+  final String? color; // HEX цвет, например #FF5733
+
+  factory BusSeatBookedByInfo.fromJson(Map<String, dynamic> json) {
+    return BusSeatBookedByInfo(
+      id: (json['id'] as num?)?.toInt() ?? 0,
+      name: json['name'] as String? ?? '',
+      color: json['color'] as String?,
     );
   }
 }

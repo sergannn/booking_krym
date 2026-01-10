@@ -234,7 +234,7 @@ class BookingResponse {
   }
 }
 
-enum PassengerType { adult, child, senior, disabled, special }
+enum PassengerType { adult, child, senior, disabled, special, concession }
 
 extension PassengerTypeX on PassengerType {
   String get apiValue => name;
@@ -251,6 +251,22 @@ extension PassengerTypeX on PassengerType {
         return 'Инвалид';
       case PassengerType.special:
         return 'Спеццена';
+      case PassengerType.concession:
+        return 'Льготный';
+    }
+  }
+  
+  /// Возвращает true, если тип пассажира требует входной билет
+  bool get requiresEntry {
+    switch (this) {
+      case PassengerType.adult:
+      case PassengerType.child:
+      case PassengerType.senior:
+      case PassengerType.disabled:
+        return true; // Со входными
+      case PassengerType.concession:
+      case PassengerType.special:
+        return false; // Без входных
     }
   }
 

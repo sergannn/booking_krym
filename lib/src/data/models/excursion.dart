@@ -17,6 +17,9 @@ class Excursion {
     required this.tariffs,
     this.staffPrices = const [],
     this.isUnscheduled = false,
+    this.unscheduledDateId,
+    this.isDeleted = false,
+    this.isCancelled = false,
   });
 
   final int id;
@@ -34,6 +37,9 @@ class Excursion {
   final Map<String, ExcursionTariff> tariffs;
   final List<StaffPrice> staffPrices;
   final bool isUnscheduled;
+  final int? unscheduledDateId; // ID внеплановой даты для удаления
+  final bool isDeleted; // Помечена ли как удаленная
+  final bool isCancelled; // Отменена ли экскурсия
 
   bool get isPast => dateTime.isBefore(DateTime.now());
 
@@ -96,6 +102,9 @@ class Excursion {
       ),
       staffPrices: _parseStaffPrices(json['staff_prices'] as List<dynamic>?),
       isUnscheduled: json['is_unscheduled'] as bool? ?? false,
+      unscheduledDateId: json['unscheduled_date_id'] as int?,
+      isDeleted: json['is_deleted'] as bool? ?? false,
+      isCancelled: json['is_cancelled'] as bool? ?? false,
     );
   }
 

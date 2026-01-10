@@ -231,10 +231,18 @@ class _StaffWalletSheetState extends ConsumerState<StaffWalletSheet> {
                           }
                           
                           filteredTransactions = wallet.transactions.where((t) {
-                            if (startDate != null && t.createdAt.isBefore(startDate.subtract(const Duration(seconds: 1)))) {
+                            // Используем дату экскурсии для фильтрации, если есть бронирование
+                            DateTime transactionDate;
+                            if (t.booking != null && t.booking!.excursion.dateTime != null) {
+                              transactionDate = t.booking!.excursion.dateTime;
+                            } else {
+                              transactionDate = t.createdAt;
+                            }
+                            
+                            if (startDate != null && transactionDate.isBefore(startDate.subtract(const Duration(seconds: 1)))) {
                               return false;
                             }
-                            if (endDate != null && t.createdAt.isAfter(endDate.add(const Duration(seconds: 1)))) {
+                            if (endDate != null && transactionDate.isAfter(endDate.add(const Duration(seconds: 1)))) {
                               return false;
                             }
                             return true;
@@ -248,13 +256,21 @@ class _StaffWalletSheetState extends ConsumerState<StaffWalletSheet> {
                           );
                         }
 
-                        // Группируем транзакции по дате
+                        // Группируем транзакции по дате экскурсии (а не по дате продажи)
                         final groupedTransactions = <DateTime, List<WalletTransactionItem>>{};
                         for (final transaction in filteredTransactions) {
+                          // Используем дату экскурсии, если есть бронирование, иначе дату создания транзакции
+                          DateTime transactionDate;
+                          if (transaction.booking != null && transaction.booking!.excursion.dateTime != null) {
+                            transactionDate = transaction.booking!.excursion.dateTime;
+                          } else {
+                            transactionDate = transaction.createdAt;
+                          }
+                          
                           final date = DateTime(
-                            transaction.createdAt.year,
-                            transaction.createdAt.month,
-                            transaction.createdAt.day,
+                            transactionDate.year,
+                            transactionDate.month,
+                            transactionDate.day,
                           );
                           groupedTransactions.putIfAbsent(date, () => []).add(transaction);
                         }
@@ -265,13 +281,24 @@ class _StaffWalletSheetState extends ConsumerState<StaffWalletSheet> {
 
                         return Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: sortedDates.map((date) {
+                          children: sortedDates.asMap().entries.map((dateEntry) {
+                            final dateIndex = dateEntry.key;
+                            final date = dateEntry.value;
                             final transactions = groupedTransactions[date]!;
-                            // Сортируем транзакции внутри дня по времени (новые первыми)
-                            transactions.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+                            // Сортируем транзакции внутри дня по дате экскурсии (новые первыми)
+                            transactions.sort((a, b) {
+                              DateTime dateA = a.booking?.excursion.dateTime ?? a.createdAt;
+                              DateTime dateB = b.booking?.excursion.dateTime ?? b.createdAt;
+                              return dateB.compareTo(dateA);
+                            });
                             final isExpanded = _expandedDates.contains(date);
                             
-                            return ExpansionTile(
+                            return Card(
+                              margin: const EdgeInsets.only(bottom: 8),
+                              color: dateIndex % 2 == 0 
+                                  ? Colors.grey.shade50 
+                                  : Colors.white,
+                              child: ExpansionTile(
                               initiallyExpanded: isExpanded,
                               onExpansionChanged: (expanded) {
                                 setState(() {
@@ -294,35 +321,83 @@ class _StaffWalletSheetState extends ConsumerState<StaffWalletSheet> {
                                           .primary,
                                     ),
                               ),
-                              children: transactions.map(
-                                (transaction) => ListTile(
-                                  leading: CircleAvatar(
-                                    backgroundColor: transaction.amount >= 0
-                                        ? Colors.green.shade100
-                                        : Colors.red.shade100,
-                                    child: Icon(
-                                      transaction.amount >= 0
-                                          ? Icons.arrow_downward
-                                          : Icons.arrow_upward,
-                                      color: transaction.amount >= 0
-                                          ? Colors.green
-                                          : Colors.red,
+                              children: transactions.asMap().entries.map(
+                                (entry) {
+                                  final transaction = entry.value;
+                                  final index = entry.key;
+                                  return Container(
+                                    margin: const EdgeInsets.only(bottom: 4),
+                                    color: index % 2 == 0 
+                                        ? Colors.grey.shade100 
+                                        : Colors.white,
+                                    child: ExpansionTile(
+                                    leading: CircleAvatar(
+                                      backgroundColor: transaction.amount >= 0
+                                          ? Colors.green.shade100
+                                          : Colors.red.shade100,
+                                      child: Icon(
+                                        transaction.amount >= 0
+                                            ? Icons.arrow_downward
+                                            : Icons.arrow_upward,
+                                        color: transaction.amount >= 0
+                                            ? Colors.green
+                                            : Colors.red,
+                                      ),
                                     ),
-                                  ),
-                                  title: Text(
-                                    '${transaction.cleanedDescription} ${DateFormat('HH:mm').format(transaction.createdAt)}',
-                                  ),
-                                  trailing: Text(
-                                    '${transaction.amount.toStringAsFixed(2)} ₽',
-                                    style: TextStyle(
-                                      color: transaction.amount >= 0
-                                          ? Colors.green
-                                          : Colors.red,
-                                      fontWeight: FontWeight.w500,
+                                    title: Text(
+                                      transaction.cleanedDescription,
+                                      style: Theme.of(context).textTheme.bodyMedium,
                                     ),
-                                  ),
-                                ),
+                                    subtitle: Text(
+                                      DateFormat('dd.MM.yyyy HH:mm').format(transaction.createdAt),
+                                      style: Theme.of(context).textTheme.bodySmall,
+                                    ),
+                                    trailing: Text(
+                                      '${transaction.amount.toStringAsFixed(2)} ₽',
+                                      style: TextStyle(
+                                        color: transaction.amount >= 0
+                                            ? Colors.green
+                                            : Colors.red,
+                                        fontWeight: FontWeight.w600,
+                                        fontSize: 16,
+                                      ),
+                                    ),
+                                    children: transaction.booking != null ? [
+                                      ListTile(
+                                        title: Text(
+                                          'Бронирование',
+                                          style: Theme.of(context).textTheme.titleSmall,
+                                        ),
+                                        subtitle: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            const SizedBox(height: 8),
+                                            Text(
+                                              'Экскурсия: ${transaction.booking!.excursion.title}',
+                                            ),
+                                            if (transaction.booking!.excursion.dateTime != null) ...[
+                                              const SizedBox(height: 4),
+                                              Text(
+                                                'Дата: ${DateFormat('dd.MM.yyyy HH:mm').format(transaction.booking!.excursion.dateTime)}',
+                                              ),
+                                            ],
+                                            const SizedBox(height: 4),
+                                            Text(
+                                              'Клиент: ${transaction.booking!.customerName}',
+                                            ),
+                                            const SizedBox(height: 4),
+                                            Text(
+                                              'Сумма бронирования: ${transaction.booking!.price.toStringAsFixed(2)} ₽',
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ] : [],
+                                    ),
+                                  );
+                                },
                               ).toList(),
+                              ),
                             );
                           }).toList(),
                         );

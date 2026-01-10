@@ -14,6 +14,7 @@ class BookingDialog extends StatefulWidget {
     this.lockSeatSelection = false,
     this.sellers, // Список продавцов для выбора (только для админов)
     this.currentUserId, // ID текущего пользователя (для админов)
+    this.excursionTitle, // Название экскурсии для отображения в заголовке
   });
 
   final List<Stop> stops;
@@ -22,6 +23,7 @@ class BookingDialog extends StatefulWidget {
   final bool lockSeatSelection;
   final List<UserSummary>? sellers; // Список продавцов для выбора
   final int? currentUserId; // ID текущего пользователя
+  final String? excursionTitle; // Название экскурсии
 
   @override
   State<BookingDialog> createState() => _BookingDialogState();
@@ -103,7 +105,7 @@ class _BookingDialogState extends State<BookingDialog>
     final hasSeats = _seatNumbers.isNotEmpty;
 
     return AlertDialog(
-      title: const Text('Новое бронирование'),
+      title: Text(widget.excursionTitle ?? 'Новое бронирование'),
       content: SizedBox(
         width: double.maxFinite,
         child: SingleChildScrollView(
@@ -394,38 +396,71 @@ class _BookingDialogState extends State<BookingDialog>
             },
           ),
           const SizedBox(height: 12),
-          DropdownButtonFormField<PassengerType>(
-            value: data.passengerType,
-            items: PassengerType.values
-                .map(
-                  (type) => DropdownMenuItem(
-                    value: type,
-                    child: Text(type.label),
-                  ),
-                )
-                .toList(),
-            onChanged: (value) {
-              if (value != null) {
-                setState(() {
-                  data.passengerType = value;
-                });
-              }
-            },
-            decoration: const InputDecoration(labelText: 'Тип пассажира'),
+          // Заголовок "Тип пассажира"
+          const Text(
+            'Тип пассажира',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+            ),
           ),
           const SizedBox(height: 12),
-          CheckboxListTile(
-            title: const Text('Входной билет'),
-            value: data.withEntry,
-            onChanged: (value) {
-              if (value != null) {
-                setState(() {
-                  data.withEntry = value;
-                });
-              }
-            },
+          // Категория "Без входных"
+          _buildCategoryHeader('Без входных'),
+          const SizedBox(height: 8),
+          _buildPassengerTypeOption(
+            data,
+            PassengerType.adult,
+            'Взрослый',
+            false,
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 4),
+          _buildPassengerTypeOption(
+            data,
+            PassengerType.concession,
+            'Льготный',
+            false,
+          ),
+          const SizedBox(height: 16),
+          // Категория "Со входными"
+          _buildCategoryHeader('Со входными'),
+          const SizedBox(height: 8),
+          _buildPassengerTypeOption(
+            data,
+            PassengerType.adult,
+            'Взрослый',
+            true,
+          ),
+          const SizedBox(height: 4),
+          _buildPassengerTypeOption(
+            data,
+            PassengerType.child,
+            'Детский',
+            true,
+          ),
+          const SizedBox(height: 4),
+          _buildPassengerTypeOption(
+            data,
+            PassengerType.senior,
+            'Пенсионер',
+            true,
+          ),
+          const SizedBox(height: 4),
+          _buildPassengerTypeOption(
+            data,
+            PassengerType.disabled,
+            'Инвалид',
+            true,
+          ),
+          const SizedBox(height: 16),
+          // Спеццена отдельно
+          _buildPassengerTypeOption(
+            data,
+            PassengerType.special,
+            'Спеццена',
+            false,
+          ),
+          const SizedBox(height: 16),
           Builder(
             builder: (context) {
               final tariff = widget.tariffs[data.passengerType.apiValue];
@@ -455,6 +490,88 @@ class _BookingDialogState extends State<BookingDialog>
     );
   }
 
+  Widget _buildCategoryHeader(String title) {
+    return Text(
+      title,
+      style: const TextStyle(
+        fontSize: 14,
+        fontWeight: FontWeight.bold,
+      ),
+    );
+  }
+
+  Widget _buildPassengerTypeOption(
+    _SeatPassengerData data,
+    PassengerType type,
+    String label,
+    bool requiresEntry,
+  ) {
+    // Проверяем, выбран ли этот тип с правильным флагом withEntry
+    final isSelected = data.passengerType == type && data.withEntry == requiresEntry;
+
+    return InkWell(
+      onTap: () {
+        setState(() {
+          data.passengerType = type;
+          data.withEntry = requiresEntry;
+        });
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? Theme.of(context).colorScheme.primaryContainer
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: isSelected
+                ? Theme.of(context).colorScheme.primary
+                : Colors.grey.shade300,
+            width: isSelected ? 2 : 1,
+          ),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              isSelected ? Icons.radio_button_checked : Icons.radio_button_unchecked,
+              color: isSelected
+                  ? Theme.of(context).colorScheme.primary
+                  : Colors.grey,
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                label,
+                style: TextStyle(
+                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                ),
+              ),
+            ),
+            // Показываем цену
+            Builder(
+              builder: (context) {
+                final tariff = widget.tariffs[type.apiValue];
+                if (tariff != null) {
+                  final price = requiresEntry
+                      ? (tariff.priceWithEntry ?? tariff.price)
+                      : (tariff.priceWithoutEntry ?? tariff.price);
+                  return Text(
+                    '${price.toStringAsFixed(2)} ₽',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w500,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
+                  );
+                }
+                return const SizedBox.shrink();
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   /// Копирует данные из указанного места на все остальные места
   void _copyToAllSeats(int sourceSeatNum) {
     final sourceData = _seatData[sourceSeatNum]!;
@@ -467,9 +584,8 @@ class _BookingDialogState extends State<BookingDialog>
           targetData.nameController.text = sourceData.nameController.text;
           // Копируем телефон
           targetData.phoneController.text = sourceData.phoneController.text;
-          // Копируем тип пассажира
+          // Копируем тип пассажира и флаг входного билета
           targetData.passengerType = sourceData.passengerType;
-          // Копируем флаг входного билета
           targetData.withEntry = sourceData.withEntry;
         }
       }
@@ -530,7 +646,7 @@ class _SeatPassengerData {
   final TextEditingController nameController;
   final TextEditingController phoneController;
   PassengerType passengerType = PassengerType.adult;
-  bool withEntry = false;
+  bool withEntry = false; // Определяется автоматически на основе выбранной категории
 }
 
 class BookingDialogResult {

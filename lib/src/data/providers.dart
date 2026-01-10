@@ -19,6 +19,7 @@ import 'repositories/stops_repository.dart';
 import 'repositories/users_repository.dart';
 import 'repositories/wallet_repository.dart';
 import 'repositories/schedule_repository.dart';
+import 'repositories/settlements_repository.dart';
 
 final apiClientProvider = Provider<ApiClient>((ref) {
   return ApiClient.instance;
@@ -62,6 +63,11 @@ final assignmentsRepositoryProvider = Provider<AssignmentsRepository>((ref) {
 final scheduleRepositoryProvider = Provider<ScheduleRepository>((ref) {
   final client = ref.watch(apiClientProvider);
   return ScheduleRepository(client);
+});
+
+final settlementsRepositoryProvider = Provider<SettlementsRepository>((ref) {
+  final client = ref.watch(apiClientProvider);
+  return SettlementsRepository(client);
 });
 
 final excursionsFutureProvider = FutureProvider<List<Excursion>>((ref) {

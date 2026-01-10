@@ -66,4 +66,14 @@ class UsersRepository {
       authenticated: true,
     );
   }
+
+  Future<void> updateUserColor(int userId, String? color) async {
+    await _client.putJson(
+      '/api/users/$userId/color',
+      authenticated: true,
+      body: {
+        'color': color,
+      },
+    );
+  }
 }

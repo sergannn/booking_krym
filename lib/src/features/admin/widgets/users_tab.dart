@@ -2,6 +2,7 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_colorpicker/flutter_colorpicker.dart';
 
 import '../../../data/models/user_summary.dart';
 import '../../../data/providers.dart';
@@ -72,6 +73,8 @@ class _UsersTabState extends ConsumerState<UsersTab>
                         content: Text(
                           'Пользователь "${created.name}" создан. Логин: ${created.email}, Пароль: ${created.password ?? "не установлен"}',
                         ),
+                        behavior: SnackBarBehavior.floating,
+                        margin: const EdgeInsets.all(16),
                       ),
                     );
                   }
@@ -238,7 +241,10 @@ class _UsersTabState extends ConsumerState<UsersTab>
     if (user.id == widget.currentUserId) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-            content: Text('Нельзя удалить собственного пользователя')),
+          content: Text('Нельзя удалить собственного пользователя'),
+          behavior: SnackBarBehavior.floating,
+          margin: EdgeInsets.all(16),
+        ),
       );
       return;
     }
@@ -272,11 +278,19 @@ class _UsersTabState extends ConsumerState<UsersTab>
       await ref.read(usersRepositoryProvider).deleteUser(user.id);
       ref.invalidate(allUsersFutureProvider);
       messenger.showSnackBar(
-        SnackBar(content: Text('Пользователь "${user.name}" удалён')),
+        SnackBar(
+          content: Text('Пользователь "${user.name}" удалён'),
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.all(16),
+        ),
       );
     } catch (error) {
       messenger.showSnackBar(
-        SnackBar(content: Text('Не удалось удалить: $error')),
+        SnackBar(
+          content: Text('Не удалось удалить: $error'),
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.all(16),
+        ),
       );
     }
   }
@@ -308,11 +322,17 @@ class _UsersTabState extends ConsumerState<UsersTab>
                 ? 'Цвет пользователя "${user.name}" удалён'
                 : 'Цвет пользователя "${user.name}" обновлён',
           ),
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.all(16),
         ),
       );
     } catch (error) {
       messenger.showSnackBar(
-        SnackBar(content: Text('Не удалось обновить цвет: $error')),
+        SnackBar(
+          content: Text('Не удалось обновить цвет: $error'),
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.all(16),
+        ),
       );
     }
   }
@@ -566,28 +586,18 @@ class _ColorPickerDialog extends StatefulWidget {
 }
 
 class _ColorPickerDialogState extends State<_ColorPickerDialog> {
-  String? _selectedColor;
-
-  // Предустановленные цвета
-  static const List<String> _presetColors = [
-    '#FF5733', // Красный
-    '#33FF57', // Зеленый
-    '#3357FF', // Синий
-    '#FF33F5', // Розовый
-    '#F5FF33', // Желтый
-    '#33FFF5', // Голубой
-    '#FF8C33', // Оранжевый
-    '#8C33FF', // Фиолетовый
-    '#33FF8C', // Мятный
-    '#FF338C', // Малиновый
-    '#8CFF33', // Лайм
-    '#338CFF', // Небесно-голубой
-  ];
+  Color _selectedColor = Colors.blue;
+  String? _selectedColorHex;
 
   @override
   void initState() {
     super.initState();
-    _selectedColor = widget.currentColor;
+    if (widget.currentColor != null && widget.currentColor!.isNotEmpty) {
+      _selectedColor = _parseColor(widget.currentColor!);
+      _selectedColorHex = widget.currentColor;
+    } else {
+      _selectedColorHex = null;
+    }
   }
 
   @override
@@ -599,58 +609,29 @@ class _ColorPickerDialogState extends State<_ColorPickerDialog> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('Предустановленные цвета:'),
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: _presetColors.map((color) {
-                final isSelected = _selectedColor == color;
-                return InkWell(
-                  onTap: () => setState(() => _selectedColor = color),
-                  child: Container(
-                    width: 48,
-                    height: 48,
-                    decoration: BoxDecoration(
-                      color: _parseColor(color),
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: isSelected
-                            ? Colors.black
-                            : Colors.grey.shade300,
-                        width: isSelected ? 3 : 1,
-                      ),
-                    ),
-                    child: isSelected
-                        ? const Icon(Icons.check, color: Colors.white)
-                        : null,
-                  ),
-                );
-              }).toList(),
+            ColorPicker(
+              pickerColor: _selectedColor,
+              onColorChanged: (Color color) {
+                setState(() {
+                  _selectedColor = color;
+                  _selectedColorHex = '#${color.value.toRadixString(16).substring(2).toUpperCase()}';
+                });
+              },
+              labelTypes: const [],
+              displayThumbColor: true,
+              paletteType: PaletteType.hslWithSaturation,
+              enableAlpha: false,
+              pickerAreaHeightPercent: 0.7,
             ),
             const SizedBox(height: 16),
-            const Text('Или введите HEX цвет:'),
-            const SizedBox(height: 8),
-            TextField(
-              decoration: InputDecoration(
-                hintText: '#FF5733',
-                prefixText: '#',
-                border: const OutlineInputBorder(),
-              ),
-              maxLength: 6,
-              onChanged: (value) {
-                if (value.isNotEmpty && value.length == 6) {
-                  setState(() => _selectedColor = '#$value');
-                } else if (value.isEmpty) {
-                  setState(() => _selectedColor = null);
-                }
-              },
-            ),
-            const SizedBox(height: 8),
             Row(
               children: [
                 TextButton(
-                  onPressed: () => setState(() => _selectedColor = null),
+                  onPressed: () {
+                    setState(() {
+                      _selectedColorHex = null;
+                    });
+                  },
                   child: const Text('Убрать цвет'),
                 ),
               ],
@@ -664,7 +645,7 @@ class _ColorPickerDialogState extends State<_ColorPickerDialog> {
           child: const Text('Отмена'),
         ),
         FilledButton(
-          onPressed: () => Navigator.of(context).pop(_selectedColor ?? ''),
+          onPressed: () => Navigator.of(context).pop(_selectedColorHex ?? ''),
           child: const Text('Сохранить'),
         ),
       ],
@@ -675,7 +656,7 @@ class _ColorPickerDialogState extends State<_ColorPickerDialog> {
     try {
       return Color(int.parse(hexColor.substring(1), radix: 16) + 0xFF000000);
     } catch (e) {
-      return Colors.grey;
+      return Colors.blue;
     }
   }
 }

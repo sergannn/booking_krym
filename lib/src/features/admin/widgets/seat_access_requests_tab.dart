@@ -39,7 +39,11 @@ class _SeatAccessRequestsTabState extends ConsumerState<SeatAccessRequestsTab> {
       setState(() => _loading = false);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка загрузки: $e')),
+          SnackBar(
+            content: Text('Ошибка загрузки: $e'),
+            behavior: SnackBarBehavior.floating,
+            margin: const EdgeInsets.all(16),
+          ),
         );
       }
     }
@@ -53,13 +57,21 @@ class _SeatAccessRequestsTabState extends ConsumerState<SeatAccessRequestsTab> {
       _loadRequests();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Запрос одобрен')),
+          const SnackBar(
+            content: Text('Запрос одобрен'),
+            behavior: SnackBarBehavior.floating,
+            margin: EdgeInsets.all(16),
+          ),
         );
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка: $e')),
+          SnackBar(
+            content: Text('Ошибка: $e'),
+            behavior: SnackBarBehavior.floating,
+            margin: const EdgeInsets.all(16),
+          ),
         );
       }
     }
@@ -92,13 +104,21 @@ class _SeatAccessRequestsTabState extends ConsumerState<SeatAccessRequestsTab> {
       _loadRequests();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Запрос отклонен')),
+          const SnackBar(
+            content: Text('Запрос отклонен'),
+            behavior: SnackBarBehavior.floating,
+            margin: EdgeInsets.all(16),
+          ),
         );
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка: $e')),
+          SnackBar(
+            content: Text('Ошибка: $e'),
+            behavior: SnackBarBehavior.floating,
+            margin: const EdgeInsets.all(16),
+          ),
         );
       }
     }

@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/date_symbol_data_local.dart';
@@ -39,6 +40,21 @@ class BookingApp extends StatelessWidget {
         debugShowCheckedModeBanner: false,
         title: 'Booking Manager',
         locale: const Locale('ru', 'RU'),
+          builder: (context, child) {
+          // Добавляем проверку на веб
+          if (kIsWeb) {
+            return Center(
+              child: Container(
+                constraints: const BoxConstraints(
+                  maxWidth: 400, // Максимальная ширина для веба
+                ),
+                child: child,
+              ),
+            );
+          }
+          // Для мобильных/десктоп приложений
+          return child!;
+        },
         home: const AppShell(),
       ),
     );

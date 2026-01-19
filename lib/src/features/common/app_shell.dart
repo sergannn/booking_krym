@@ -23,7 +23,8 @@ class AppShell extends ConsumerWidget {
     ApiClient.instance.setInternetService(internetService);
     
     final authState = ref.watch(authControllerProvider);
-    return InternetStatusSnackbar(
+    
+    final content = InternetStatusSnackbar(
       child: authState.when(
         loading: () => const Scaffold(
           body: Center(child: CircularProgressIndicator()),
@@ -70,6 +71,8 @@ class AppShell extends ConsumerWidget {
         },
       ),
     );
+    
+    return content;
   }
 }
 

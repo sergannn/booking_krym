@@ -23,6 +23,7 @@ import 'widgets/assign_staff_sheet.dart';
 import 'widgets/prices_tab.dart';
 import 'widgets/seat_permissions_tab.dart';
 import 'widgets/seat_access_requests_tab.dart';
+import 'widgets/buses_tab.dart';
 import '../common/settings_screen.dart';
 import '../../core/services/internet_connection_service.dart';
 
@@ -30,6 +31,11 @@ enum StaffIndicatorMode { combined, split }
 
 final staffIndicatorModeProvider =
     StateProvider<StaffIndicatorMode>((ref) => StaffIndicatorMode.combined);
+
+// Provider для загрузки экскурсии с деталями бронирований (для схемы рассадки)
+final _excursionWithDetailsProvider = FutureProvider.autoDispose.family<Excursion?, int>(
+  (ref, id) => ref.read(excursionsRepositoryProvider).fetchExcursion(id, includeBookingDetails: true),
+);
 
 class AdminHomePage extends ConsumerWidget {
   const AdminHomePage({super.key, required this.user});
@@ -75,6 +81,8 @@ class AdminHomePage extends ConsumerWidget {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
                       content: Text('Экскурсия "${created.title}" добавлена'),
+                      behavior: SnackBarBehavior.floating,
+                      margin: const EdgeInsets.all(16),
                     ),
                   );
                 },
@@ -205,6 +213,14 @@ class _AdminDrawer extends ConsumerWidget {
             onTap: () {
               Navigator.of(context).pop();
               _showPage(context, const _SettlementsTab());
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.directions_bus),
+            title: const Text('Автобусы'),
+            onTap: () {
+              Navigator.of(context).pop();
+              _showPage(context, const BusesTab());
             },
           ),
           const Divider(),
@@ -483,8 +499,7 @@ class _NewBookingSubTabState extends ConsumerState<_NewBookingSubTab>
                   itemBuilder: (context, index) {
                     final date = sortedDates[index];
                     final dayItems = groups[date]!;
-                    return Card(
-                      margin: const EdgeInsets.only(bottom: 12),
+                    return _ExpandableCard(
                       child: ExpansionTile(
                         title: Text(
                           dateFormatter.format(date),
@@ -697,8 +712,7 @@ class _MyBookingsSubTabState extends ConsumerState<_MyBookingsSubTab>
               final groups = dateGroups[date]!;
               final totalBookings =
                   groups.fold<int>(0, (sum, g) => sum + g.bookings.length);
-              return Card(
-                margin: const EdgeInsets.only(bottom: 12),
+              return _ExpandableCard(
                 color: dateIndex % 2 == 0 
                     ? Colors.grey.shade50 
                     : Colors.white,
@@ -929,30 +943,36 @@ class _MyBookingsSubTabState extends ConsumerState<_MyBookingsSubTab>
                   bookingsByUser.putIfAbsent(userName, () => []).add(booking);
                 }
 
-                return ExpansionTile(
-                  title: Text(group.excursion.title),
-                  subtitle: Text(
-                    '${timeFormatter.format(group.excursion.dateTime)}$bookedByText • ${group.bookings.length} мест${group.bookings.length > 1 ? 'а' : ''}${group.excursion.maxSeats != null ? ' из ${group.excursion.maxSeats}' : ''}',
-                  ),
-                  children: [
-                    // Группируем по сотрудникам
-                    ...bookingsByUser.entries.map(
-                      (entry) {
-                        final isLastGroup = entry == bookingsByUser.entries.last;
-                        return Column(
-                          children: [
-                            // Сворачиваемая группа по сотруднику
-                            ExpansionTile(
-                              tilePadding:
-                                  const EdgeInsets.symmetric(horizontal: 16),
-                              childrenPadding: EdgeInsets.zero,
-                              title: Text(
-                                '${entry.key} — ${entry.value.length} мест${entry.value.length > 1 ? 'а' : ''}',
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .bodyMedium
-                                    ?.copyWith(fontWeight: FontWeight.w600),
-                              ),
+                return _ExpandableCard(
+                  useCard: false,
+                  margin: EdgeInsets.zero,
+                  child: ExpansionTile(
+                    title: Text(group.excursion.title),
+                    subtitle: Text(
+                      '${timeFormatter.format(group.excursion.dateTime)}$bookedByText • ${group.bookings.length} мест${group.bookings.length > 1 ? 'а' : ''}${group.excursion.maxSeats != null ? ' из ${group.excursion.maxSeats}' : ''}',
+                    ),
+                    children: [
+                      // Группируем по сотрудникам
+                      ...bookingsByUser.entries.map(
+                        (entry) {
+                          final isLastGroup = entry == bookingsByUser.entries.last;
+                          return Column(
+                            children: [
+                              // Сворачиваемая группа по сотруднику
+                              _ExpandableCard(
+                                useCard: false,
+                                margin: EdgeInsets.zero,
+                                child: ExpansionTile(
+                                  tilePadding:
+                                      const EdgeInsets.symmetric(horizontal: 16),
+                                  childrenPadding: EdgeInsets.zero,
+                                  title: Text(
+                                    '${entry.key} — ${entry.value.length} мест${entry.value.length > 1 ? 'а' : ''}',
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .bodyMedium
+                                        ?.copyWith(fontWeight: FontWeight.w600),
+                                  ),
                               children: entry.value
                                   .map(
                                     (booking) => ListTile(
@@ -970,20 +990,22 @@ class _MyBookingsSubTabState extends ConsumerState<_MyBookingsSubTab>
                                     ),
                                   )
                                   .toList(),
-                            ),
-                            // Разделитель между группами (кроме последней)
-                            if (!isLastGroup)
-                              Divider(
-                                height: 1,
-                                thickness: 1,
-                                indent: 16,
-                                endIndent: 16,
+                                ),
                               ),
-                          ],
-                        );
-                      },
-                    ),
-                  ],
+                              // Разделитель между группами (кроме последней)
+                              if (!isLastGroup)
+                                Divider(
+                                  height: 1,
+                                  thickness: 1,
+                                  indent: 16,
+                                  endIndent: 16,
+                                ),
+                            ],
+                          );
+                        },
+                      ),
+                    ],
+                  ),
                 );
               }).toList(),
             ),
@@ -1015,11 +1037,19 @@ class _MyBookingsSubTabState extends ConsumerState<_MyBookingsSubTab>
       ref.invalidate(bookingsFutureProvider);
       ref.invalidate(excursionsFutureProvider);
       messenger.showSnackBar(
-        const SnackBar(content: Text('Бронирование отменено')),
+        const SnackBar(
+          content: Text('Бронирование отменено'),
+          behavior: SnackBarBehavior.floating,
+          margin: EdgeInsets.all(16),
+        ),
       );
     } catch (error) {
       messenger.showSnackBar(
-        SnackBar(content: Text('Не удалось отменить: $error')),
+        SnackBar(
+          content: Text('Не удалось отменить: $error'),
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.all(16),
+        ),
       );
     }
   }
@@ -1299,29 +1329,35 @@ class _AllBookingsSubTabState extends ConsumerState<_AllBookingsSubTab>
                   bookingsByUser.putIfAbsent(userName, () => []).add(booking);
                 }
 
-                return ExpansionTile(
-                  title: Text(group.excursion.title),
-                  subtitle: Text(
-                    '${timeFormatter.format(group.excursion.dateTime)}$bookedByText • ${group.bookings.length} мест${group.bookings.length > 1 ? 'а' : ''}${group.excursion.maxSeats != null ? ' из ${group.excursion.maxSeats}' : ''}',
-                  ),
-                  children: [
-                    // Группируем по сотрудникам
-                    ...bookingsByUser.entries.map(
-                      (entry) {
-                        final isLastGroup = entry == bookingsByUser.entries.last;
-                        return Column(
-                          children: [
-                            ExpansionTile(
-                              tilePadding:
-                                  const EdgeInsets.symmetric(horizontal: 16),
-                              childrenPadding: EdgeInsets.zero,
-                              title: Text(
-                                '${entry.key} — ${entry.value.length} мест${entry.value.length > 1 ? 'а' : ''}',
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .bodyMedium
-                                    ?.copyWith(fontWeight: FontWeight.w600),
-                              ),
+                return _ExpandableCard(
+                  useCard: false,
+                  margin: EdgeInsets.zero,
+                  child: ExpansionTile(
+                    title: Text(group.excursion.title),
+                    subtitle: Text(
+                      '${timeFormatter.format(group.excursion.dateTime)}$bookedByText • ${group.bookings.length} мест${group.bookings.length > 1 ? 'а' : ''}${group.excursion.maxSeats != null ? ' из ${group.excursion.maxSeats}' : ''}',
+                    ),
+                    children: [
+                      // Группируем по сотрудникам
+                      ...bookingsByUser.entries.map(
+                        (entry) {
+                          final isLastGroup = entry == bookingsByUser.entries.last;
+                          return Column(
+                            children: [
+                              _ExpandableCard(
+                                useCard: false,
+                                margin: EdgeInsets.zero,
+                                child: ExpansionTile(
+                                  tilePadding:
+                                      const EdgeInsets.symmetric(horizontal: 16),
+                                  childrenPadding: EdgeInsets.zero,
+                                  title: Text(
+                                    '${entry.key} — ${entry.value.length} мест${entry.value.length > 1 ? 'а' : ''}',
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .bodyMedium
+                                        ?.copyWith(fontWeight: FontWeight.w600),
+                                  ),
                               children: entry.value
                                   .asMap()
                                   .entries
@@ -1349,20 +1385,22 @@ class _AllBookingsSubTabState extends ConsumerState<_AllBookingsSubTab>
                                     },
                                   )
                                   .toList(),
-                            ),
-                            // Разделитель между группами (кроме последней)
-                            if (!isLastGroup)
-                              Divider(
-                                height: 1,
-                                thickness: 1,
-                                indent: 16,
-                                endIndent: 16,
+                                ),
                               ),
-                          ],
-                        );
-                      },
-                    ),
-                  ],
+                              // Разделитель между группами (кроме последней)
+                              if (!isLastGroup)
+                                Divider(
+                                  height: 1,
+                                  thickness: 1,
+                                  indent: 16,
+                                  endIndent: 16,
+                                ),
+                            ],
+                          );
+                        },
+                      ),
+                    ],
+                  ),
                 );
               }).toList(),
             ),
@@ -1394,13 +1432,93 @@ class _AllBookingsSubTabState extends ConsumerState<_AllBookingsSubTab>
       ref.invalidate(bookingsFutureProvider);
       ref.invalidate(excursionsFutureProvider);
       messenger.showSnackBar(
-        const SnackBar(content: Text('Бронирование отменено')),
+        const SnackBar(
+          content: Text('Бронирование отменено'),
+          behavior: SnackBarBehavior.floating,
+          margin: EdgeInsets.all(16),
+        ),
       );
     } catch (error) {
       messenger.showSnackBar(
-        SnackBar(content: Text('Не удалось отменить: $error')),
+        SnackBar(
+          content: Text('Не удалось отменить: $error'),
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.all(16),
+        ),
       );
     }
+  }
+}
+
+class _ExpandableCard extends StatefulWidget {
+  const _ExpandableCard({
+    required this.child,
+    this.margin = const EdgeInsets.only(bottom: 12),
+    this.color,
+    this.useCard = true,
+  });
+
+  final ExpansionTile child;
+  final EdgeInsetsGeometry margin;
+  final Color? color;
+  final bool useCard;
+
+  @override
+  State<_ExpandableCard> createState() => _ExpandableCardState();
+}
+
+class _ExpandableCardState extends State<_ExpandableCard> {
+  bool _isExpanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final expansionTile = ExpansionTile(
+      title: widget.child.title,
+      subtitle: widget.child.subtitle,
+      leading: widget.child.leading,
+      trailing: widget.child.trailing,
+      tilePadding: widget.child.tilePadding,
+      childrenPadding: widget.child.childrenPadding,
+      initiallyExpanded: widget.child.initiallyExpanded ?? false,
+      onExpansionChanged: (expanded) {
+        setState(() {
+          _isExpanded = expanded;
+        });
+        widget.child.onExpansionChanged?.call(expanded);
+      },
+      children: widget.child.children,
+    );
+
+    if (!widget.useCard) {
+      return Container(
+        decoration: BoxDecoration(
+          border: Border.all(
+            color: _isExpanded 
+                ? Theme.of(context).colorScheme.primary 
+                : Colors.transparent,
+            width: _isExpanded ? 2 : 0,
+          ),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: expansionTile,
+      );
+    }
+
+    return Card(
+      margin: widget.margin,
+      color: widget.color,
+      elevation: _isExpanded ? 4 : 1,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(
+          color: _isExpanded 
+              ? Theme.of(context).colorScheme.primary 
+              : Colors.transparent,
+          width: _isExpanded ? 2 : 0,
+        ),
+      ),
+      child: expansionTile,
+    );
   }
 }
 
@@ -1479,8 +1597,11 @@ class _AdminExcursionCard extends ConsumerWidget {
                                         '${excursion.availableSeatsCount}/${excursion.maxSeats}',
                                     style:
                                         Theme.of(context).textTheme.bodySmall?.copyWith(
-                                              fontSize: 12,
-                                            ),
+                                          color: excursion.availableSeatsCount != excursion.maxSeats
+                                              ? Colors.blue
+                                              : Colors.black,
+                                          fontSize: 12,
+                                        ),
                                   ),
                                 ),
                                 if (excursion.isCancelled)
@@ -1784,6 +1905,8 @@ class _AdminExcursionCard extends ConsumerWidget {
         const SnackBar(
           content: Text('Эта экскурсия отменена. Бронирование невозможно.'),
           backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+          margin: EdgeInsets.all(16),
         ),
       );
       return;
@@ -1865,6 +1988,8 @@ class _AdminExcursionCard extends ConsumerWidget {
                 ? response.message
                 : 'Бронирование выполнено',
           ),
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.all(16),
         ),
       );
       ref.invalidate(bookingsFutureProvider);
@@ -1905,12 +2030,20 @@ class _AdminExcursionCard extends ConsumerWidget {
         }
       } catch (error) {
         messenger.showSnackBar(
-          SnackBar(content: Text('Не удалось сохранить билет: $error')),
+          SnackBar(
+            content: Text('Не удалось сохранить билет: $error'),
+            behavior: SnackBarBehavior.floating,
+            margin: const EdgeInsets.all(16),
+          ),
         );
       }
     } catch (error) {
       messenger.showSnackBar(
-        SnackBar(content: Text('Ошибка бронирования: $error')),
+        SnackBar(
+          content: Text('Ошибка бронирования: $error'),
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.all(16),
+        ),
       );
     }
   }
@@ -1922,6 +2055,8 @@ class _AdminExcursionCard extends ConsumerWidget {
         const SnackBar(
           content: Text('Эта экскурсия отменена. Бронирование невозможно.'),
           backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+          margin: EdgeInsets.all(16),
         ),
       );
       return;
@@ -2008,7 +2143,10 @@ class _AdminExcursionCard extends ConsumerWidget {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (dialogContext) => _AdminSeatingChartSheet(excursion: excursion),
+      builder: (dialogContext) => _AdminSeatingChartSheet(
+        excursionId: excursion.id,
+        excursionDate: excursion.dateTime,
+      ),
     );
   }
 
@@ -2025,13 +2163,52 @@ class _AdminExcursionCard extends ConsumerWidget {
   }
 }
 
-class _AdminSeatingChartSheet extends StatelessWidget {
-  const _AdminSeatingChartSheet({required this.excursion});
+class _AdminSeatingChartSheet extends ConsumerWidget {
+  const _AdminSeatingChartSheet({
+    required this.excursionId,
+    required this.excursionDate,
+  });
 
-  final Excursion excursion;
+  final int excursionId;
+  final DateTime excursionDate;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    // Используем данные из списка экскурсий для конкретной даты/времени
+    // чтобы получить правильно пересчитанные места для этой даты
+    final excursionsAsync = ref.watch(excursionsFutureProvider);
+    final targetDate = DateFormat('yyyy-MM-dd').format(excursionDate);
+    final targetTime = DateFormat('HH:mm').format(excursionDate);
+    
+    final excursionAsync = excursionsAsync.when(
+      data: (excursions) {
+        // Ищем экскурсию с нужным ID и датой/временем
+        try {
+          final found = excursions.firstWhere(
+            (e) {
+              if (e.id != excursionId) return false;
+              final eDate = DateFormat('yyyy-MM-dd').format(e.dateTime);
+              final eTime = DateFormat('HH:mm').format(e.dateTime);
+              return eDate == targetDate && eTime == targetTime;
+            },
+          );
+          return AsyncValue.data(found);
+        } catch (e) {
+          // Если не найдена для конкретной даты, используем первую с таким ID
+          try {
+            final found = excursions.firstWhere(
+              (e) => e.id == excursionId,
+            );
+            return AsyncValue.data(found);
+          } catch (e2) {
+            return AsyncValue.error(e2, StackTrace.current);
+          }
+        }
+      },
+      loading: () => const AsyncValue.loading(),
+      error: (error, stack) => AsyncValue.error(error, stack),
+    );
+
     return DraggableScrollableSheet(
       initialChildSize: 0.9,
       minChildSize: 0.5,
@@ -2058,9 +2235,19 @@ class _AdminSeatingChartSheet extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Expanded(
-                    child: Text(
-                      'Схема рассадки: ${excursion.title}',
-                      style: Theme.of(context).textTheme.titleLarge,
+                    child: excursionAsync.when(
+                      data: (excursion) => Text(
+                        'Схема рассадки: ${excursion?.title ?? 'Загрузка...'}',
+                        style: Theme.of(context).textTheme.titleLarge,
+                      ),
+                      loading: () => Text(
+                        'Схема рассадки: Загрузка...',
+                        style: Theme.of(context).textTheme.titleLarge,
+                      ),
+                      error: (_, __) => Text(
+                        'Схема рассадки: Ошибка',
+                        style: Theme.of(context).textTheme.titleLarge,
+                      ),
                     ),
                   ),
                   IconButton(
@@ -2072,10 +2259,31 @@ class _AdminSeatingChartSheet extends StatelessWidget {
             ),
             const Divider(height: 1),
             Expanded(
-              child: SingleChildScrollView(
-                controller: scrollController,
-                padding: const EdgeInsets.all(16),
-                child: _AdminSeatsGrid(busSeats: excursion.busSeats),
+              child: excursionAsync.when(
+                data: (excursion) {
+                  if (excursion == null) {
+                    return const Center(
+                      child: Padding(
+                        padding: EdgeInsets.all(24),
+                        child: Text('Экскурсия не найдена'),
+                      ),
+                    );
+                  }
+                  return SingleChildScrollView(
+                    controller: scrollController,
+                    padding: const EdgeInsets.all(16),
+                    child: _AdminSeatsGrid(busSeats: excursion.busSeats),
+                  );
+                },
+                loading: () => const Center(
+                  child: CircularProgressIndicator(),
+                ),
+                error: (error, stack) => Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Text('Ошибка загрузки: $error'),
+                  ),
+                ),
               ),
             ),
           ],
@@ -2115,9 +2323,9 @@ class _AdminSeatsGrid extends StatelessWidget {
           label.write(' — ${booking.customerName}');
         }
         
-        // Добавляем информацию о продавце
+        // Добавляем информацию о продавце только если есть бронирование для этой даты
         final sellerInfo = <String>[];
-        if (seat.bookedByInfo != null) {
+        if (hasBooking && seat.bookedByInfo != null) {
           sellerInfo.add('${seat.bookedByInfo!.name}');
         }
         
@@ -2159,36 +2367,25 @@ class _AdminSeatsGrid extends StatelessWidget {
               ].where((e) => e.isNotEmpty).join('\n')
             : (seat.status == 'available' 
                 ? 'Свободно' 
-                : (seat.bookedByInfo != null && seat.bookedByInfo!.name.isNotEmpty
-                    ? seat.bookedByInfo!.name
-                    : 'Занято'));
+                : 'Занято');
 
-        // Используем цвет продавца, если он есть, иначе стандартные цвета
+        // Используем цвет продавца только если есть бронирование для этой даты
+        // Если места свободно для этой даты, не показываем цвет продавца
         Color seatColor;
-        // Проверяем bookedByInfo независимо от наличия booking
-        if (seat.bookedByInfo?.color != null && seat.bookedByInfo!.color!.isNotEmpty) {
+        if (hasBooking && seat.bookedByInfo?.color != null && seat.bookedByInfo!.color!.isNotEmpty) {
+          // Есть бронирование для этой даты - показываем цвет продавца
           try {
             final hexColor = seat.bookedByInfo!.color!;
             seatColor = Color(int.parse(hexColor.substring(1), radix: 16) + 0xFF000000);
-            // Логируем для отладки (можно убрать после проверки)
-            debugPrint('Место ${seat.seatNumber}: цвет продавца ${seat.bookedByInfo!.name} = $hexColor -> $seatColor');
           } catch (e) {
-            debugPrint('Ошибка парсинга цвета для места ${seat.seatNumber}: $e');
             // Если ошибка парсинга цвета, используем стандартные цвета
-            seatColor = hasBooking
-                ? Colors.blue.shade100
-                : seat.status == 'available'
-                    ? Colors.green.shade100
-                    : Colors.red.shade100;
+            seatColor = Colors.blue.shade100;
           }
         } else {
-          debugPrint('Место ${seat.seatNumber}: нет bookedByInfo или цвета. bookedByInfo=${seat.bookedByInfo}, hasBooking=$hasBooking, status=${seat.status}');
-          // Если нет цвета продавца, используем стандартные цвета
-          seatColor = hasBooking
-              ? Colors.blue.shade100
-              : seat.status == 'available'
-                  ? Colors.green.shade100
-                  : Colors.red.shade100;
+          // Нет бронирования для этой даты - используем стандартные цвета
+          seatColor = seat.status == 'available'
+              ? Colors.green.shade100
+              : Colors.red.shade100;
         }
 
         return Container(
@@ -2469,31 +2666,31 @@ class _AdminWalletTabState extends ConsumerState<_AdminWalletTab> {
                       });
                       final isExpanded = _expandedDates.contains(date);
                       
-                      return Card(
+                      return _ExpandableCard(
                         margin: const EdgeInsets.only(bottom: 8),
                         color: dateIndex % 2 == 0 
                             ? Colors.grey.shade50 
                             : Colors.white,
                         child: ExpansionTile(
-                        initiallyExpanded: isExpanded,
-                        onExpansionChanged: (expanded) {
-                          setState(() {
-                            if (expanded) {
-                              _expandedDates.add(date);
-                            } else {
-                              _expandedDates.remove(date);
-                            }
-                          });
-                        },
-                        title: Text(
-                          _formatDateHeader(date),
-                          style: Theme.of(context)
-                              .textTheme
-                              .titleSmall
-                              ?.copyWith(
-                                fontWeight: FontWeight.bold,
-                                color: Theme.of(context)
-                                    .colorScheme
+                          initiallyExpanded: isExpanded,
+                          onExpansionChanged: (expanded) {
+                            setState(() {
+                              if (expanded) {
+                                _expandedDates.add(date);
+                              } else {
+                                _expandedDates.remove(date);
+                              }
+                            });
+                          },
+                          title: Text(
+                            _formatDateHeader(date),
+                            style: Theme.of(context)
+                                .textTheme
+                                .titleSmall
+                                ?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                  color: Theme.of(context)
+                                      .colorScheme
                                     .primary,
                               ),
                         ),
@@ -2687,14 +2884,23 @@ class _AdminWalletTabState extends ConsumerState<_AdminWalletTab> {
                                 margin: const EdgeInsets.only(bottom: 8),
                                 child: ExpansionTile(
                                   title: Text(
-                                    formatter.format(booking.excursion.dateTime),
+                                    booking.excursion.title,
                                     style: Theme.of(context).textTheme.titleMedium,
                                   ),
-                                  subtitle: Text(
-                                    'Продажа: ${formatter.format(booking.bookedAt)}',
-                                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                      color: Colors.grey,
-                                    ),
+                                  subtitle: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        formatter.format(booking.excursion.dateTime),
+                                        style: Theme.of(context).textTheme.bodySmall,
+                                      ),
+                                      Text(
+                                        'Продажа: ${formatter.format(booking.bookedAt)}',
+                                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                          color: Colors.grey,
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                   trailing: Text(
                                     '${booking.price.toStringAsFixed(2)} ₽',
@@ -3001,11 +3207,19 @@ class _AdminWalletTabState extends ConsumerState<_AdminWalletTab> {
       ref.invalidate(userSalesFutureProvider(widget.user.id));
       ref.invalidate(userProfitFutureProvider(widget.user.id));
       messenger.showSnackBar(
-        const SnackBar(content: Text('Бронирование отменено')),
+        const SnackBar(
+          content: Text('Бронирование отменено'),
+          behavior: SnackBarBehavior.floating,
+          margin: EdgeInsets.all(16),
+        ),
       );
     } catch (error) {
       messenger.showSnackBar(
-        SnackBar(content: Text('Не удалось отменить: $error')),
+        SnackBar(
+          content: Text('Не удалось отменить: $error'),
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.all(16),
+        ),
       );
     }
   }
@@ -3320,13 +3534,21 @@ class _AdminScheduleTabState extends ConsumerState<_AdminScheduleTab> {
                                                     if (context.mounted) {
                                                       ref.invalidate(excursionsFutureProvider);
                                                       ScaffoldMessenger.of(context).showSnackBar(
-                                                        const SnackBar(content: Text('Внеплановая дата удалена')),
+                                                        const SnackBar(
+                                                          content: Text('Внеплановая дата удалена'),
+                                                          behavior: SnackBarBehavior.floating,
+                                                          margin: EdgeInsets.all(16),
+                                                        ),
                                                       );
                                                     }
                                                   } catch (e) {
                                                     if (context.mounted) {
                                                       ScaffoldMessenger.of(context).showSnackBar(
-                                                        SnackBar(content: Text('Ошибка: $e')),
+                                                        SnackBar(
+                                                          content: Text('Ошибка: $e'),
+                                                          behavior: SnackBarBehavior.floating,
+                                                          margin: const EdgeInsets.all(16),
+                                                        ),
                                                       );
                                                     }
                                                   }
@@ -4166,13 +4388,19 @@ class _CancelledExcursionsTab extends ConsumerWidget {
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(
                                   content: Text('Экскурсия восстановлена'),
+                                  behavior: SnackBarBehavior.floating,
+                                  margin: EdgeInsets.all(16),
                                 ),
                               );
                             }
                           } catch (e) {
                             if (context.mounted) {
                               ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(content: Text('Ошибка: $e')),
+                                SnackBar(
+                                  content: Text('Ошибка: $e'),
+                                  behavior: SnackBarBehavior.floating,
+                                  margin: const EdgeInsets.all(16),
+                                ),
                               );
                             }
                           }
@@ -4206,13 +4434,19 @@ class _CancelledExcursionsTab extends ConsumerWidget {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
                     content: Text('Экскурсия отменена'),
+                    behavior: SnackBarBehavior.floating,
+                    margin: EdgeInsets.all(16),
                   ),
                 );
               }
             } catch (e) {
               if (context.mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Ошибка: $e')),
+                  SnackBar(
+                    content: Text('Ошибка: $e'),
+                    behavior: SnackBarBehavior.floating,
+                    margin: const EdgeInsets.all(16),
+                  ),
                 );
               }
             }
@@ -4996,6 +5230,8 @@ class _SettlementsTabState extends ConsumerState<_SettlementsTab>
             content: Text(
               'Расчет создан для ${bookingIds.length} ${bookingIds.length == 1 ? 'продажи' : 'продаж'}. Продажи перемещены в таб "Рассчитано"',
             ),
+            behavior: SnackBarBehavior.floating,
+            margin: const EdgeInsets.all(16),
             action: SnackBarAction(
               label: 'Перейти',
               onPressed: () {
@@ -5036,7 +5272,11 @@ class _SettlementsTabState extends ConsumerState<_SettlementsTab>
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка: $e')),
+          SnackBar(
+            content: Text('Ошибка: $e'),
+            behavior: SnackBarBehavior.floating,
+            margin: const EdgeInsets.all(16),
+          ),
         );
       }
     }
@@ -5121,7 +5361,11 @@ class _SettlementsTabState extends ConsumerState<_SettlementsTab>
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка при удалении продажи из расчета: $e')),
+          SnackBar(
+            content: Text('Ошибка при удалении продажи из расчета: $e'),
+            behavior: SnackBarBehavior.floating,
+            margin: const EdgeInsets.all(16),
+          ),
         );
       }
     }

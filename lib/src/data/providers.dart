@@ -1,10 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/api/api_client.dart';
-import '../features/auth/auth_controller.dart';
 import 'models/booking.dart';
 import 'models/excursion.dart';
-import 'models/bus_seat.dart';
 import 'models/stop.dart';
 import 'models/user_role_info.dart';
 import 'models/user_summary.dart';
@@ -20,6 +18,8 @@ import 'repositories/users_repository.dart';
 import 'repositories/wallet_repository.dart';
 import 'repositories/schedule_repository.dart';
 import 'repositories/settlements_repository.dart';
+import 'repositories/buses_repository.dart';
+import 'models/bus.dart';
 
 final apiClientProvider = Provider<ApiClient>((ref) {
   return ApiClient.instance;
@@ -68,6 +68,16 @@ final scheduleRepositoryProvider = Provider<ScheduleRepository>((ref) {
 final settlementsRepositoryProvider = Provider<SettlementsRepository>((ref) {
   final client = ref.watch(apiClientProvider);
   return SettlementsRepository(client);
+});
+
+final busesRepositoryProvider = Provider<BusesRepository>((ref) {
+  final client = ref.watch(apiClientProvider);
+  return BusesRepository(client);
+});
+
+final busesFutureProvider = FutureProvider<List<Bus>>((ref) async {
+  final repository = ref.watch(busesRepositoryProvider);
+  return repository.fetchBuses();
 });
 
 final excursionsFutureProvider = FutureProvider<List<Excursion>>((ref) {

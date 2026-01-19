@@ -1,9 +1,11 @@
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kIsWeb, debugPrint;
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
+import '../../../core/services/ticket_storage_service.dart';
+import '../../../data/models/saved_ticket.dart';
 
 // Условный импорт для веб-функций
 import 'pdf_downloader_stub.dart'
@@ -16,10 +18,25 @@ class PdfDownloader {
   /// Сохраняет и позволяет отправить PDF
   /// На веб-платформе скачивает файл через браузер
   /// На мобильных сохраняет во временный файл и предлагает отправить/сохранить
+  /// Если передан ticketInfo, также сохраняет билет локально
   static Future<void> saveAndSharePdf({
     required Uint8List pdfBytes,
     required String filename,
+    SavedTicket? ticketInfo,
   }) async {
+    // Сохраняем билет локально, если передан ticketInfo (только на мобильных)
+    if (!kIsWeb && ticketInfo != null) {
+      try {
+        await TicketStorageService.instance.saveTicket(
+          pdfBytes: pdfBytes,
+          ticket: ticketInfo,
+        );
+      } catch (e) {
+        // Игнорируем ошибки сохранения, чтобы не мешать основному процессу
+        debugPrint('Failed to save ticket locally: $e');
+      }
+    }
+
     if (kIsWeb) {
       // На веб используем Blob URL для скачивания
       downloadPdfWeb(pdfBytes, filename);

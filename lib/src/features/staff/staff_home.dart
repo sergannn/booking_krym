@@ -37,6 +37,7 @@ class StaffHomePage extends ConsumerStatefulWidget {
 class _StaffHomePageState extends ConsumerState<StaffHomePage> {
   DateTime? _selectedDateFrom;
   DateTime? _selectedDateTo;
+  final Set<int> _expandedExcursionIds = {};
 
   @override
   void initState() {
@@ -72,9 +73,9 @@ class _StaffHomePageState extends ConsumerState<StaffHomePage> {
     }
 
     final appBarTitle = isDriver
-        ? 'Кабинет водителя'
+        ? 'Кабинет водителя — ${widget.user.name}'
         : isGuide
-            ? 'Кабинет экскурсовода'
+            ? 'Кабинет экскурсовода — ${widget.user.name}'
             : 'Расписание — ${widget.user.name}';
 
     // Отслеживаем статус интернета
@@ -99,6 +100,7 @@ class _StaffHomePageState extends ConsumerState<StaffHomePage> {
                 tabs: const [
                   Tab(text: 'Предстоящие'),
                   Tab(text: 'Прошедшие'),
+                  Tab(icon: Icon(Icons.currency_ruble), text: 'Прибыль'),
                 ],
                 labelColor: Colors.white,
                 unselectedLabelColor: Colors.white70,
@@ -113,222 +115,8 @@ class _StaffHomePageState extends ConsumerState<StaffHomePage> {
           ),
         ],
       ),
-      body: Column(
-        children: [
-          // Прибыль
-          if (isDriver || isGuide)
-            staffProfitAsync.when(
-              loading: () => const SizedBox.shrink(),
-              error: (_, __) => const SizedBox.shrink(),
-              data: (profitData) {
-                final breakdown =
-                    profitData['breakdown'] as List<dynamic>? ?? [];
-                
-                // Фильтруем breakdown по датам
-                List<dynamic> filteredBreakdown = breakdown;
-                if (_selectedDateFrom != null || _selectedDateTo != null) {
-                  filteredBreakdown = breakdown.where((item) {
-                    final dateTime = item['date_time'] as String?;
-                    if (dateTime == null || dateTime.isEmpty) {
-                      return false;
-                    }
-                    try {
-                      final date = DateTime.parse(dateTime);
-                      final dateOnly = DateTime(date.year, date.month, date.day);
-                      
-                      if (_selectedDateFrom != null) {
-                        final fromDate = DateTime(_selectedDateFrom!.year, _selectedDateFrom!.month, _selectedDateFrom!.day);
-                        if (dateOnly.isBefore(fromDate)) {
-                          return false;
-                        }
-                      }
-                      if (_selectedDateTo != null) {
-                        final toDate = DateTime(_selectedDateTo!.year, _selectedDateTo!.month, _selectedDateTo!.day).add(const Duration(days: 1));
-                        if (dateOnly.isAfter(toDate.subtract(const Duration(seconds: 1)))) {
-                          return false;
-                        }
-                      }
-                      return true;
-                    } catch (e) {
-                      return false;
-                    }
-                  }).toList();
-                }
-                
-                // Пересчитываем общую прибыль для отфильтрованных данных
-                double filteredTotalProfit = filteredBreakdown.fold<double>(
-                  0.0,
-                  (sum, item) => sum + ((item['profit'] as num?)?.toDouble() ?? 0.0),
-                );
-                
-                return Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(16),
-                  color: Colors.green.shade50,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Фильтр по датам
-                      Card(
-                        child: Padding(
-                          padding: const EdgeInsets.all(12),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Фильтр по датам',
-                                style: Theme.of(context).textTheme.titleSmall,
-                              ),
-                              const SizedBox(height: 8),
-                              Row(
-                                children: [
-                                  Expanded(
-                                    child: OutlinedButton.icon(
-                                      icon: const Icon(Icons.calendar_today, size: 18),
-                                      label: Text(
-                                        _selectedDateFrom != null
-                                            ? DateFormat('dd.MM.yyyy', 'ru_RU').format(_selectedDateFrom!)
-                                            : 'От',
-                                        style: const TextStyle(fontSize: 12),
-                                      ),
-                                      onPressed: () async {
-                                        final picked = await showDatePicker(
-                                          context: context,
-                                          initialDate: _selectedDateFrom ?? DateTime.now(),
-                                          firstDate: DateTime(2020),
-                                          lastDate: DateTime(2100),
-                                        );
-                                        if (picked != null) {
-                                          setState(() {
-                                            _selectedDateFrom = picked;
-                                          });
-                                        }
-                                      },
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                    child: OutlinedButton.icon(
-                                      icon: const Icon(Icons.calendar_today, size: 18),
-                                      label: Text(
-                                        _selectedDateTo != null
-                                            ? DateFormat('dd.MM.yyyy', 'ru_RU').format(_selectedDateTo!)
-                                            : 'До',
-                                        style: const TextStyle(fontSize: 12),
-                                      ),
-                                      onPressed: () async {
-                                        final picked = await showDatePicker(
-                                          context: context,
-                                          initialDate: _selectedDateTo ?? DateTime.now(),
-                                          firstDate: _selectedDateFrom ?? DateTime(2020),
-                                          lastDate: DateTime(2100),
-                                        );
-                                        if (picked != null) {
-                                          setState(() {
-                                            _selectedDateTo = picked;
-                                          });
-                                        }
-                                      },
-                                    ),
-                                  ),
-                                  if (_selectedDateFrom != null || _selectedDateTo != null)
-                                    IconButton(
-                                      icon: const Icon(Icons.clear, size: 20),
-                                      onPressed: () {
-                                        setState(() {
-                                          _selectedDateFrom = null;
-                                          _selectedDateTo = null;
-                                        });
-                                      },
-                                    ),
-                                ],
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      Text(
-                        'Общая прибыль',
-                        style: Theme.of(context).textTheme.titleSmall,
-                      ),
-                      if (_selectedDateFrom != null || _selectedDateTo != null)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 4),
-                          child: Text(
-                            _selectedDateFrom != null && _selectedDateTo != null
-                                ? '${DateFormat('dd.MM.yyyy', 'ru_RU').format(_selectedDateFrom!)} - ${DateFormat('dd.MM.yyyy', 'ru_RU').format(_selectedDateTo!)}'
-                                : _selectedDateFrom != null
-                                    ? 'С ${DateFormat('dd.MM.yyyy', 'ru_RU').format(_selectedDateFrom!)}'
-                                    : 'До ${DateFormat('dd.MM.yyyy', 'ru_RU').format(_selectedDateTo!)}',
-                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: Colors.grey.shade700,
-                            ),
-                          ),
-                        ),
-                      const SizedBox(height: 4),
-                      Text(
-                        '${filteredTotalProfit.toStringAsFixed(2)} ₽',
-                        style:
-                            Theme.of(context).textTheme.headlineSmall?.copyWith(
-                                  color: Colors.green.shade700,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                      ),
-                      if (filteredBreakdown.isNotEmpty) ...[
-                        const SizedBox(height: 12),
-                        ExpansionTile(
-                          title: const Text('Детализация прибыли'),
-                          children: [
-                            ...filteredBreakdown.map((item) {
-                              final excursionTitle =
-                                  item['excursion_title'] as String? ?? '';
-                              final profit =
-                                  (item['profit'] as num?)?.toDouble() ?? 0.0;
-                              final passengerCount =
-                                  item['passenger_count'] as int? ?? 0;
-                              final dateTime = item['date_time'] as String?;
-                              DateTime? date;
-                              if (dateTime != null) {
-                                try {
-                                  date = DateTime.parse(dateTime);
-                                } catch (_) {}
-                              }
-                              return ListTile(
-                                title: Text(excursionTitle),
-                                subtitle: date != null
-                                    ? Text(formatter.format(date))
-                                    : null,
-                                trailing: Text(
-                                  '${profit.toStringAsFixed(2)} ₽',
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.green.shade700,
-                                  ),
-                                ),
-                                leading: Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Icon(Icons.people, size: 20),
-                                    Text(
-                                      '$passengerCount',
-                                      style: const TextStyle(fontSize: 12),
-                                    ),
-                                  ],
-                                ),
-                              );
-                            }),
-                          ],
-                        ),
-                      ],
-                    ],
-                  ),
-                );
-              },
-            ),
-          // Расписание
-          Expanded(
-            child: excursionsAsync.when(
+      body: showTabs
+          ? excursionsAsync.when(
               loading: () => const Center(child: CircularProgressIndicator()),
               error: (error, _) => Center(child: Text('Ошибка: $error')),
               data: (items) {
@@ -363,7 +151,18 @@ class _StaffHomePageState extends ConsumerState<StaffHomePage> {
                           .firstOrNull;
                       final role = staffMember?.roleInExcursion ?? 
                           (isDriver ? 'driver' : 'guide');
+                      final isExpanded = _expandedExcursionIds.contains(excursion.id);
                       return Card(
+                        elevation: isExpanded ? 4 : 1,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          side: BorderSide(
+                            color: isExpanded 
+                                ? Theme.of(context).colorScheme.primary 
+                                : Colors.transparent,
+                            width: isExpanded ? 2 : 0,
+                          ),
+                        ),
                         child: ExpansionTile(
                           title: Text(
                             excursion.title,
@@ -372,27 +171,31 @@ class _StaffHomePageState extends ConsumerState<StaffHomePage> {
                           subtitle: Text(
                             formatter.format(excursion.dateTime),
                           ),
+                          onExpansionChanged: (expanded) {
+                            setState(() {
+                              if (expanded) {
+                                _expandedExcursionIds.add(excursion.id);
+                              } else {
+                                _expandedExcursionIds.remove(excursion.id);
+                              }
+                            });
+                          },
+                          initiallyExpanded: isExpanded,
                           children: [
                             Padding(
                               padding: const EdgeInsets.all(16),
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text(
-                                      'Роль: ${role == 'driver' ? 'Водитель' : 'Гид'}'),
-                                  if (excursion.description.isNotEmpty) ...[
-                                    const SizedBox(height: 8),
-                                    Text(excursion.description),
-                                  ],
-                                    // Детализация прибыли
-                                  if (isDriver || isGuide) ...[
-                                    const SizedBox(height: 16),
-                                    _ProfitDetails(
-                                      excursionId: excursion.id,
-                                      excursionDate: excursion.dateTime,
-                                      profitData: profitData,
-                                    ),
-                                  ],
+                                  _CollapsibleInfoRow(
+                                    role: role,
+                                    description: excursion.description,
+                                    isDriver: isDriver,
+                                    isGuide: isGuide,
+                                    excursionId: excursion.id,
+                                    excursionDate: excursion.dateTime,
+                                    profitData: profitData,
+                                  ),
                                   // Остановки, указанные в бронированиях (что важно водителю)
                                   const SizedBox(height: 12),
                                   const Text(
@@ -526,17 +329,207 @@ class _StaffHomePageState extends ConsumerState<StaffHomePage> {
                       pastList,
                       'Нет прошедших экскурсий',
                     ),
+                    _ProfitTab(
+                      staffProfitAsync: staffProfitAsync,
+                      selectedDateFrom: _selectedDateFrom,
+                      selectedDateTo: _selectedDateTo,
+                      onDateFromChanged: (date) {
+                        setState(() {
+                          _selectedDateFrom = date;
+                        });
+                      },
+                      onDateToChanged: (date) {
+                        setState(() {
+                          _selectedDateTo = date;
+                        });
+                      },
+                      onDatesCleared: () {
+                        setState(() {
+                          _selectedDateFrom = null;
+                          _selectedDateTo = null;
+                        });
+                      },
+                      formatter: formatter,
+                    ),
                   ],
                 );
               },
+            )
+          : excursionsAsync.when(
+              loading: () => const Center(child: CircularProgressIndicator()),
+              error: (error, _) => Center(child: Text('Ошибка: $error')),
+              data: (items) {
+                final assigned = items
+                    .where(
+                      (excursion) => excursion.assignedStaff
+                          .any((staff) => staff.id == widget.user.id),
+                    )
+                    .toList();
+
+                if (assigned.isEmpty) {
+                  return const Center(
+                    child: Text('Для вас пока нет назначенных экскурсий'),
+                  );
+                }
+
+                assigned.sort((a, b) => a.dateTime.compareTo(b.dateTime));
+                return ListView.separated(
+                  padding: const EdgeInsets.all(16),
+                  itemCount: assigned.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 12),
+                  itemBuilder: (context, index) {
+                    final excursion = assigned[index];
+                    final staffMember = excursion.assignedStaff
+                        .where((staff) => staff.id == widget.user.id)
+                        .firstOrNull;
+                    final role = staffMember?.roleInExcursion ?? 
+                        (isDriver ? 'driver' : 'guide');
+                    final isExpanded = _expandedExcursionIds.contains(excursion.id);
+                    return Card(
+                      elevation: isExpanded ? 4 : 1,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        side: BorderSide(
+                          color: isExpanded 
+                              ? Theme.of(context).colorScheme.primary 
+                              : Colors.transparent,
+                          width: isExpanded ? 2 : 0,
+                        ),
+                      ),
+                      child: ExpansionTile(
+                        title: Text(
+                          excursion.title,
+                          style: Theme.of(context).textTheme.titleMedium,
+                        ),
+                        subtitle: Text(
+                          formatter.format(excursion.dateTime),
+                        ),
+                        onExpansionChanged: (expanded) {
+                          setState(() {
+                            if (expanded) {
+                              _expandedExcursionIds.add(excursion.id);
+                            } else {
+                              _expandedExcursionIds.remove(excursion.id);
+                            }
+                          });
+                        },
+                        initiallyExpanded: isExpanded,
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                _CollapsibleInfoRow(
+                                  role: role,
+                                  description: excursion.description,
+                                  isDriver: isDriver,
+                                  isGuide: isGuide,
+                                  excursionId: excursion.id,
+                                  excursionDate: excursion.dateTime,
+                                  profitData: staffProfitAsync.valueOrNull,
+                                ),
+                                const SizedBox(height: 12),
+                                const Text(
+                                  'Посадка пассажиров:',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                _BookedStopsFromSeats(
+                                    busSeats: excursion.busSeats),
+                                const SizedBox(height: 16),
+                                ExpansionTile(
+                                  tilePadding: EdgeInsets.zero,
+                                  title: const Text(
+                                    'Все остановки маршрута',
+                                    style:
+                                        TextStyle(fontWeight: FontWeight.bold),
+                                  ),
+                                  children: [
+                                    FutureBuilder<List<Stop>>(
+                                      future: ref
+                                          .read(stopsRepositoryProvider)
+                                          .fetchStopsForExcursion(
+                                              excursion.id),
+                                      builder: (context, snapshot) {
+                                        if (snapshot.connectionState ==
+                                            ConnectionState.waiting) {
+                                          return const Padding(
+                                            padding: EdgeInsets.all(8.0),
+                                            child: Center(
+                                              child:
+                                                  CircularProgressIndicator(),
+                                            ),
+                                          );
+                                        }
+                                        if (snapshot.hasError) {
+                                          return Padding(
+                                            padding:
+                                                const EdgeInsets.all(8.0),
+                                            child: Text(
+                                              'Ошибка загрузки остановок: ${snapshot.error}',
+                                              style: TextStyle(
+                                                color: Colors.red.shade700,
+                                              ),
+                                            ),
+                                          );
+                                        }
+                                        final stops = snapshot.data ?? [];
+                                        if (stops.isEmpty) {
+                                          return const Padding(
+                                            padding:
+                                                EdgeInsets.all(8.0),
+                                            child:
+                                                Text('Остановки не указаны'),
+                                          );
+                                        }
+                                        return Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: stops
+                                              .map((stop) => Padding(
+                                                    padding:
+                                                        const EdgeInsets.only(
+                                                            bottom: 4),
+                                                    child: Row(
+                                                      children: [
+                                                        Icon(
+                                                          Icons.location_on,
+                                                          size: 16,
+                                                          color:
+                                                              Colors.grey,
+                                                        ),
+                                                        const SizedBox(
+                                                            width: 8),
+                                                        Expanded(
+                                                          child:
+                                                              Text(stop.name),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  ))
+                                              .toList(),
+                                        );
+                                      },
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                );
+              },
             ),
-          ),
-        ],
-      ),
     );
 
     if (showTabs) {
-      return DefaultTabController(length: 2, child: scaffold);
+      return DefaultTabController(length: 3, child: scaffold);
     }
     return scaffold;
   }
@@ -674,32 +667,601 @@ class _BookedStopsFromSeats extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final stops = busSeats
-        .map((seat) => seat.booking?.stopTitle ?? '')
-        .where((title) => title.isNotEmpty)
-        .toSet()
-        .toList();
+    // Группируем места по остановкам
+    final Map<String, List<BusSeat>> stopsMap = {};
+    
+    for (final seat in busSeats) {
+      final stopTitle = seat.booking?.stopTitle ?? '';
+      if (stopTitle.isNotEmpty) {
+        stopsMap.putIfAbsent(stopTitle, () => []).add(seat);
+      }
+    }
 
-    if (stops.isEmpty) {
+    if (stopsMap.isEmpty) {
       return const Text('Остановки будут показаны после бронирований.');
     }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
-      children: stops
-          .map(
-            (title) => Padding(
-              padding: const EdgeInsets.only(bottom: 4),
-              child: Row(
-                children: [
-                  const Icon(Icons.flag, size: 16, color: Colors.blueGrey),
-                  const SizedBox(width: 8),
-                  Expanded(child: Text(title)),
-                ],
+      children: stopsMap.entries.map((entry) {
+        final stopTitle = entry.key;
+        final seats = entry.value;
+        
+        return Card(
+          margin: const EdgeInsets.only(bottom: 12),
+          child: ExpansionTile(
+            tilePadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            childrenPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+            leading: const Icon(Icons.flag, size: 18, color: Colors.blueGrey),
+            title: Text(
+              stopTitle,
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
               ),
             ),
-          )
-          .toList(),
+            subtitle: Text(
+              'Мест занято: ${seats.length}',
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.grey.shade600,
+                fontStyle: FontStyle.italic,
+              ),
+            ),
+            children: [
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: seats.map((seat) {
+                  return _SeatCard(seat: seat);
+                }).toList(),
+              ),
+            ],
+          ),
+        );
+      }).toList(),
+    );
+  }
+}
+
+class _SeatCard extends StatelessWidget {
+  const _SeatCard({required this.seat});
+
+  final BusSeat seat;
+
+  @override
+  Widget build(BuildContext context) {
+    final seatNumber = seat.seatNumber;
+
+    return InkWell(
+      onTap: () {
+        _showSeatDetails(context, seat);
+      },
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: Colors.blue.shade100,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: Colors.blue.shade300),
+        ),
+        child: Text(
+          'Место №$seatNumber',
+          style: const TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 15,
+            color: Colors.blue,
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showSeatDetails(BuildContext context, BusSeat seat) {
+    final booking = seat.booking;
+    final seatNumber = seat.seatNumber;
+    final customerName = booking?.customerName ?? '';
+    final customerPhone = booking?.customerPhone ?? '';
+    final sellerInfo = seat.bookedByInfo;
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: Colors.blue.shade100,
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Text(
+                'Место №$seatNumber',
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                  color: Colors.blue,
+                ),
+              ),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Имя и телефон по горизонтали
+            if (customerName.isNotEmpty || customerPhone.isNotEmpty) ...[
+              Row(
+                children: [
+                  if (customerName.isNotEmpty) ...[
+                    const Icon(Icons.person, size: 18, color: Colors.blueGrey),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        customerName,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 15,
+                        ),
+                      ),
+                    ),
+                  ],
+                  if (customerPhone.isNotEmpty) ...[
+                    if (customerName.isNotEmpty) const SizedBox(width: 16),
+                    const Icon(Icons.phone, size: 18, color: Colors.green),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        customerPhone,
+                        style: TextStyle(
+                          color: Colors.grey.shade800,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+              const SizedBox(height: 16),
+            ],
+            // Продавец ниже
+            if (sellerInfo != null && sellerInfo.name.isNotEmpty) ...[
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.amber.shade50,
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(
+                    color: Colors.amber.shade200,
+                    width: 1,
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    if (sellerInfo.color != null && sellerInfo.color!.isNotEmpty)
+                      Container(
+                        width: 20,
+                        height: 20,
+                        decoration: BoxDecoration(
+                          color: _parseColor(sellerInfo.color!),
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: Colors.grey.shade400,
+                            width: 1.5,
+                          ),
+                        ),
+                      )
+                    else
+                      const Icon(
+                        Icons.person_outline,
+                        size: 20,
+                        color: Colors.amber,
+                      ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Продавец',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: Colors.grey.shade600,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            sellerInfo.name,
+                            style: TextStyle(
+                              color: Colors.grey.shade900,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Закрыть'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Color _parseColor(String hexColor) {
+    try {
+      return Color(int.parse(hexColor.substring(1), radix: 16) + 0xFF000000);
+    } catch (e) {
+      return Colors.grey;
+    }
+  }
+}
+
+class _CollapsibleInfoRow extends StatefulWidget {
+  const _CollapsibleInfoRow({
+    required this.role,
+    required this.description,
+    required this.isDriver,
+    required this.isGuide,
+    required this.excursionId,
+    required this.excursionDate,
+    required this.profitData,
+  });
+
+  final String role;
+  final String description;
+  final bool isDriver;
+  final bool isGuide;
+  final int excursionId;
+  final DateTime excursionDate;
+  final Map<String, dynamic>? profitData;
+
+  @override
+  State<_CollapsibleInfoRow> createState() => _CollapsibleInfoRowState();
+}
+
+class _CollapsibleInfoRowState extends State<_CollapsibleInfoRow> {
+  bool _isDescriptionExpanded = false;
+  bool _isProfitExpanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: InkWell(
+                onTap: () {
+                  setState(() {
+                    _isDescriptionExpanded = !_isDescriptionExpanded;
+                  });
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                  decoration: BoxDecoration(
+                    color: Colors.blue.shade50,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.blue.shade200),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.info_outline, color: Colors.blue),
+                      const Spacer(),
+                      Icon(
+                        _isDescriptionExpanded
+                            ? Icons.expand_less
+                            : Icons.expand_more,
+                        color: Colors.blue,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            if (widget.isDriver || widget.isGuide) ...[
+              const SizedBox(width: 8),
+              Expanded(
+                child: InkWell(
+                  onTap: () {
+                    setState(() {
+                      _isProfitExpanded = !_isProfitExpanded;
+                    });
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                    decoration: BoxDecoration(
+                      color: Colors.green.shade50,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.green.shade200),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.currency_ruble, color: Colors.green),
+                      const Spacer(),
+                        Icon(
+                          _isProfitExpanded
+                              ? Icons.expand_less
+                              : Icons.expand_more,
+                          color: Colors.green,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
+        if (_isDescriptionExpanded && widget.description.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.blue.shade50,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text(widget.description),
+          ),
+        ],
+        if (_isProfitExpanded && (widget.isDriver || widget.isGuide)) ...[
+          const SizedBox(height: 8),
+          _ProfitDetails(
+            excursionId: widget.excursionId,
+            excursionDate: widget.excursionDate,
+            profitData: widget.profitData,
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _ProfitTab extends StatelessWidget {
+  const _ProfitTab({
+    required this.staffProfitAsync,
+    required this.selectedDateFrom,
+    required this.selectedDateTo,
+    required this.onDateFromChanged,
+    required this.onDateToChanged,
+    required this.onDatesCleared,
+    required this.formatter,
+  });
+
+  final AsyncValue<Map<String, dynamic>> staffProfitAsync;
+  final DateTime? selectedDateFrom;
+  final DateTime? selectedDateTo;
+  final ValueChanged<DateTime?> onDateFromChanged;
+  final ValueChanged<DateTime?> onDateToChanged;
+  final VoidCallback onDatesCleared;
+  final DateFormat formatter;
+
+  @override
+  Widget build(BuildContext context) {
+    return staffProfitAsync.when(
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (_, __) => const Center(child: Text('Ошибка загрузки данных о прибыли')),
+      data: (profitData) {
+        final breakdown =
+            profitData['breakdown'] as List<dynamic>? ?? [];
+        
+        // Фильтруем breakdown по датам
+        List<dynamic> filteredBreakdown = breakdown;
+        if (selectedDateFrom != null || selectedDateTo != null) {
+          filteredBreakdown = breakdown.where((item) {
+            final dateTime = item['date_time'] as String?;
+            if (dateTime == null || dateTime.isEmpty) {
+              return false;
+            }
+            try {
+              final date = DateTime.parse(dateTime);
+              final dateOnly = DateTime(date.year, date.month, date.day);
+              
+              if (selectedDateFrom != null) {
+                final fromDate = DateTime(selectedDateFrom!.year, selectedDateFrom!.month, selectedDateFrom!.day);
+                if (dateOnly.isBefore(fromDate)) {
+                  return false;
+                }
+              }
+              if (selectedDateTo != null) {
+                final toDate = DateTime(selectedDateTo!.year, selectedDateTo!.month, selectedDateTo!.day).add(const Duration(days: 1));
+                if (dateOnly.isAfter(toDate.subtract(const Duration(seconds: 1)))) {
+                  return false;
+                }
+              }
+              return true;
+            } catch (e) {
+              return false;
+            }
+          }).toList();
+        }
+        
+        // Пересчитываем общую прибыль для отфильтрованных данных
+        double filteredTotalProfit = filteredBreakdown.fold<double>(
+          0.0,
+          (sum, item) => sum + ((item['profit'] as num?)?.toDouble() ?? 0.0),
+        );
+        
+        return SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Фильтр по датам
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Фильтр по датам',
+                        style: Theme.of(context).textTheme.titleSmall,
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              icon: const Icon(Icons.calendar_today, size: 18),
+                              label: Text(
+                                selectedDateFrom != null
+                                    ? DateFormat('dd.MM.yyyy', 'ru_RU').format(selectedDateFrom!)
+                                    : 'От',
+                                style: const TextStyle(fontSize: 12),
+                              ),
+                              onPressed: () async {
+                                final picked = await showDatePicker(
+                                  context: context,
+                                  initialDate: selectedDateFrom ?? DateTime.now(),
+                                  firstDate: DateTime(2020),
+                                  lastDate: DateTime(2100),
+                                );
+                                if (picked != null) {
+                                  onDateFromChanged(picked);
+                                }
+                              },
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              icon: const Icon(Icons.calendar_today, size: 18),
+                              label: Text(
+                                selectedDateTo != null
+                                    ? DateFormat('dd.MM.yyyy', 'ru_RU').format(selectedDateTo!)
+                                    : 'До',
+                                style: const TextStyle(fontSize: 12),
+                              ),
+                              onPressed: () async {
+                                final picked = await showDatePicker(
+                                  context: context,
+                                  initialDate: selectedDateTo ?? DateTime.now(),
+                                  firstDate: selectedDateFrom ?? DateTime(2020),
+                                  lastDate: DateTime(2100),
+                                );
+                                if (picked != null) {
+                                  onDateToChanged(picked);
+                                }
+                              },
+                            ),
+                          ),
+                          if (selectedDateFrom != null || selectedDateTo != null)
+                            IconButton(
+                              icon: const Icon(Icons.clear, size: 20),
+                              onPressed: onDatesCleared,
+                            ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.green.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.green.shade200),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Общая прибыль',
+                      style: Theme.of(context).textTheme.titleSmall,
+                    ),
+                    if (selectedDateFrom != null || selectedDateTo != null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 4),
+                        child: Text(
+                          selectedDateFrom != null && selectedDateTo != null
+                              ? '${DateFormat('dd.MM.yyyy', 'ru_RU').format(selectedDateFrom!)} - ${DateFormat('dd.MM.yyyy', 'ru_RU').format(selectedDateTo!)}'
+                              : selectedDateFrom != null
+                                  ? 'С ${DateFormat('dd.MM.yyyy', 'ru_RU').format(selectedDateFrom!)}'
+                                  : 'До ${DateFormat('dd.MM.yyyy', 'ru_RU').format(selectedDateTo!)}',
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: Colors.grey.shade700,
+                          ),
+                        ),
+                      ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '${filteredTotalProfit.toStringAsFixed(2)} ₽',
+                      style:
+                          Theme.of(context).textTheme.headlineSmall?.copyWith(
+                                color: Colors.green.shade700,
+                                fontWeight: FontWeight.bold,
+                              ),
+                    ),
+                  ],
+                ),
+              ),
+              if (filteredBreakdown.isNotEmpty) ...[
+                const SizedBox(height: 16),
+                ExpansionTile(
+                  title: const Text('Детализация прибыли'),
+                  children: [
+                    ...filteredBreakdown.map((item) {
+                      final excursionTitle =
+                          item['excursion_title'] as String? ?? '';
+                      final profit =
+                          (item['profit'] as num?)?.toDouble() ?? 0.0;
+                      final passengerCount =
+                          item['passenger_count'] as int? ?? 0;
+                      final dateTime = item['date_time'] as String?;
+                      DateTime? date;
+                      if (dateTime != null) {
+                        try {
+                          date = DateTime.parse(dateTime);
+                        } catch (_) {}
+                      }
+                      return ListTile(
+                        title: Text(excursionTitle),
+                        subtitle: date != null
+                            ? Text(formatter.format(date))
+                            : null,
+                        trailing: Text(
+                          '${profit.toStringAsFixed(2)} ₽',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: Colors.green.shade700,
+                          ),
+                        ),
+                        leading: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.people, size: 20),
+                            Text(
+                              '$passengerCount',
+                              style: const TextStyle(fontSize: 12),
+                            ),
+                          ],
+                        ),
+                      );
+                    }),
+                  ],
+                ),
+              ],
+            ],
+          ),
+        );
+      },
     );
   }
 }
@@ -778,13 +1340,6 @@ class _ProfitDetails extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'Детализация прибыли',
-            style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                  fontWeight: FontWeight.bold,
-                  color: Colors.green.shade900,
-                ),
-          ),
           const SizedBox(height: 8),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,

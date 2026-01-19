@@ -13,9 +13,11 @@ import '../../data/repositories/seat_permission_repository.dart';
 import '../../data/providers.dart';
 import '../auth/auth_controller.dart';
 import '../common/utils/pdf_downloader.dart';
+import '../../data/models/saved_ticket.dart';
 import '../common/widgets/cancellation_reason_dialog.dart';
 import '../admin/widgets/prices_tab.dart';
 import '../common/settings_screen.dart';
+import 'tickets_screen.dart';
 import '../../core/services/internet_connection_service.dart';
 
 class SellerHomePage extends ConsumerStatefulWidget {
@@ -314,8 +316,7 @@ class _ExcursionDaySection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
+    return _ExpandableCard(
       color: index % 2 == 0 
           ? Colors.grey.shade50 
           : Colors.white,
@@ -342,6 +343,78 @@ class _ExcursionDaySection extends StatelessWidget {
             ),
         ],
       ),
+    );
+  }
+}
+
+class _ExpandableCard extends StatefulWidget {
+  const _ExpandableCard({
+    required this.child,
+    this.margin = const EdgeInsets.only(bottom: 12),
+    this.color,
+    this.useCard = true,
+  });
+
+  final ExpansionTile child;
+  final EdgeInsetsGeometry margin;
+  final Color? color;
+  final bool useCard;
+
+  @override
+  State<_ExpandableCard> createState() => _ExpandableCardState();
+}
+
+class _ExpandableCardState extends State<_ExpandableCard> {
+  bool _isExpanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final expansionTile = ExpansionTile(
+      title: widget.child.title,
+      subtitle: widget.child.subtitle,
+      leading: widget.child.leading,
+      trailing: widget.child.trailing,
+      tilePadding: widget.child.tilePadding,
+      childrenPadding: widget.child.childrenPadding,
+      initiallyExpanded: widget.child.initiallyExpanded ?? false,
+      onExpansionChanged: (expanded) {
+        setState(() {
+          _isExpanded = expanded;
+        });
+        widget.child.onExpansionChanged?.call(expanded);
+      },
+      children: widget.child.children,
+    );
+
+    if (!widget.useCard) {
+      return Container(
+        decoration: BoxDecoration(
+          border: Border.all(
+            color: _isExpanded 
+                ? Theme.of(context).colorScheme.primary 
+                : Colors.transparent,
+            width: _isExpanded ? 2 : 0,
+          ),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: expansionTile,
+      );
+    }
+
+    return Card(
+      margin: widget.margin,
+      color: widget.color,
+      elevation: _isExpanded ? 4 : 1,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(
+          color: _isExpanded 
+              ? Theme.of(context).colorScheme.primary 
+              : Colors.transparent,
+          width: _isExpanded ? 2 : 0,
+        ),
+      ),
+      child: expansionTile,
     );
   }
 }
@@ -495,6 +568,8 @@ class _ExcursionTile extends ConsumerWidget {
                 ? response.message
                 : 'Бронирование выполнено',
           ),
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.all(16),
         ),
       );
       ref.invalidate(bookingsFutureProvider);
@@ -510,6 +585,43 @@ class _ExcursionTile extends ConsumerWidget {
               .whereType<int>()
               .toList();
           
+          // Получаем информацию о первом бронировании для сохранения метаданных
+          final firstBooking = response.bookings?.first;
+          SavedTicket? ticketInfo;
+          if (firstBooking != null) {
+            final excursionData = firstBooking['excursion'] as Map<String, dynamic>?;
+            final stopData = firstBooking['stop'] as Map<String, dynamic>?;
+            final dateTime = firstBooking['date_time'] as String?;
+            
+            // Подсчитываем количество мест и общую сумму
+            final seatCount = allBookingIds?.length ?? 1;
+            double totalAmount = 0;
+            if (response.bookings != null) {
+              for (var booking in response.bookings!) {
+                final price = booking['price'];
+                if (price != null) {
+                  totalAmount += (price is num) ? price.toDouble() : double.tryParse(price.toString()) ?? 0;
+                }
+              }
+            }
+            
+            ticketInfo = SavedTicket(
+              bookingId: bookingId,
+              ticketNumber: 'T-${excursionData?['id'] ?? 0}-$bookingId-${DateTime.now().millisecondsSinceEpoch}',
+              excursionTitle: excursionData?['title'] as String? ?? excursion.title,
+              excursionDate: dateTime != null 
+                  ? DateFormat('dd.MM.yyyy HH:mm').format(DateTime.parse(dateTime))
+                  : formatter.format(excursion.dateTime),
+              stopName: stopData?['name'] as String? ?? 'Не указана',
+              customerName: result.customerName,
+              customerPhone: result.customerPhone,
+              fileName: 'ticket-$bookingId-${DateTime.now().millisecondsSinceEpoch}.pdf',
+              savedAt: DateTime.now(),
+              seatCount: seatCount,
+              totalAmount: totalAmount,
+            );
+          }
+          
           // Скачиваем PDF как байты, передавая все ID бронирований
           final pdfBytes = await ref
               .read(bookingsRepositoryProvider)
@@ -521,16 +633,25 @@ class _ExcursionTile extends ConsumerWidget {
           await PdfDownloader.saveAndSharePdf(
             pdfBytes: pdfBytes,
             filename: 'ticket-$bookingId.pdf',
+            ticketInfo: ticketInfo,
           );
         }
       } catch (error) {
         messenger.showSnackBar(
-          SnackBar(content: Text('Не удалось сохранить билет: $error')),
+          SnackBar(
+            content: Text('Не удалось сохранить билет: $error'),
+            behavior: SnackBarBehavior.floating,
+            margin: const EdgeInsets.all(16),
+          ),
         );
       }
     } catch (error) {
       messenger.showSnackBar(
-        SnackBar(content: Text('Ошибка бронирования: $error')),
+        SnackBar(
+          content: Text('Ошибка бронирования: $error'),
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.all(16),
+        ),
       );
     }
   }
@@ -845,8 +966,7 @@ class _BookingsTabState extends ConsumerState<_BookingsTab>
           final groups = dateGroups[date]!;
           final totalBookings =
               groups.fold<int>(0, (sum, g) => sum + g.bookings.length);
-          return Card(
-            margin: const EdgeInsets.only(bottom: 12),
+          return _ExpandableCard(
             child: ExpansionTile(
               title: Text(
                 dateFormatter.format(date),
@@ -857,12 +977,15 @@ class _BookingsTabState extends ConsumerState<_BookingsTab>
               subtitle: Text(
                   '$totalBookings ${totalBookings == 1 ? 'бронирование' : totalBookings < 5 ? 'бронирования' : 'бронирований'}'),
               children: groups.map((group) {
-                return ExpansionTile(
-                  title: Text(group.excursion.title),
-                  subtitle: Text(
-                    '${timeFormatter.format(group.excursion.dateTime)} • ${group.bookings.length} место${group.bookings.length > 1 ? 'а' : ''}${group.excursion.maxSeats != null ? ' из ${group.excursion.maxSeats}' : ''}',
-                  ),
-                  children: group.bookings
+                return _ExpandableCard(
+                  useCard: false,
+                  margin: EdgeInsets.zero,
+                  child: ExpansionTile(
+                    title: Text(group.excursion.title),
+                    subtitle: Text(
+                      '${timeFormatter.format(group.excursion.dateTime)} • ${group.bookings.length} место${group.bookings.length > 1 ? 'а' : ''}${group.excursion.maxSeats != null ? ' из ${group.excursion.maxSeats}' : ''}',
+                    ),
+                    children: group.bookings
                       .map(
                         (booking) => ListTile(
                           title: Text('Место ${booking.seat.seatNumber}'),
@@ -876,6 +999,7 @@ class _BookingsTabState extends ConsumerState<_BookingsTab>
                         ),
                       )
                       .toList(),
+                  ),
                 );
               }).toList(),
             ),
@@ -910,11 +1034,19 @@ class _BookingsTabState extends ConsumerState<_BookingsTab>
         ref.invalidate(userSalesFutureProvider(currentUserId));
       }
       messenger.showSnackBar(
-        const SnackBar(content: Text('Бронирование отменено')),
+        const SnackBar(
+          content: Text('Бронирование отменено'),
+          behavior: SnackBarBehavior.floating,
+          margin: EdgeInsets.all(16),
+        ),
       );
     } catch (error) {
       messenger.showSnackBar(
-        SnackBar(content: Text('Не удалось отменить: $error')),
+        SnackBar(
+          content: Text('Не удалось отменить: $error'),
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.all(16),
+        ),
       );
     }
   }
@@ -983,7 +1115,6 @@ class _SellerWalletTabState extends ConsumerState<_SellerWalletTab> {
     final walletAsync = ref.watch(userWalletFutureProvider(widget.user.id));
     final salesAsync = ref.watch(userSalesFutureProvider(widget.user.id));
     final profitAsync = ref.watch(userProfitFutureProvider(widget.user.id));
-    final bookingsAsync = ref.watch(bookingsFutureProvider);
     final formatter = DateFormat('dd.MM.yyyy HH:mm');
 
     return walletAsync.when(
@@ -1195,35 +1326,35 @@ class _SellerWalletTabState extends ConsumerState<_SellerWalletTab> {
                       });
                       final isExpanded = _expandedDates.contains(date);
                       
-                      return Card(
+                      return _ExpandableCard(
                         margin: const EdgeInsets.only(bottom: 8),
                         color: dateIndex % 2 == 0 
                             ? Colors.grey.shade50 
                             : Colors.white,
                         child: ExpansionTile(
-                        initiallyExpanded: isExpanded,
-                        onExpansionChanged: (expanded) {
-                          setState(() {
-                            if (expanded) {
-                              _expandedDates.add(date);
-                            } else {
-                              _expandedDates.remove(date);
-                            }
-                          });
-                        },
-                        title: Text(
-                          _formatDateHeader(date),
-                          style: Theme.of(context)
-                              .textTheme
-                              .titleSmall
-                              ?.copyWith(
-                                fontWeight: FontWeight.bold,
-                                color: Theme.of(context)
-                                    .colorScheme
-                                    .primary,
-                              ),
-                        ),
-                        children: transactions.asMap().entries.map(
+                          initiallyExpanded: isExpanded,
+                          onExpansionChanged: (expanded) {
+                            setState(() {
+                              if (expanded) {
+                                _expandedDates.add(date);
+                              } else {
+                                _expandedDates.remove(date);
+                              }
+                            });
+                          },
+                          title: Text(
+                            _formatDateHeader(date),
+                            style: Theme.of(context)
+                                .textTheme
+                                .titleSmall
+                                ?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .primary,
+                                ),
+                          ),
+                          children: transactions.asMap().entries.map(
                           (entry) {
                             final transaction = entry.value;
                             final index = entry.key;
@@ -1719,11 +1850,19 @@ class _SellerWalletTabState extends ConsumerState<_SellerWalletTab> {
       ref.invalidate(userSalesFutureProvider(widget.user.id));
       ref.invalidate(userProfitFutureProvider(widget.user.id));
       messenger.showSnackBar(
-        const SnackBar(content: Text('Бронирование отменено')),
+        const SnackBar(
+          content: Text('Бронирование отменено'),
+          behavior: SnackBarBehavior.floating,
+          margin: EdgeInsets.all(16),
+        ),
       );
     } catch (error) {
       messenger.showSnackBar(
-        SnackBar(content: Text('Не удалось отменить: $error')),
+        SnackBar(
+          content: Text('Не удалось отменить: $error'),
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.all(16),
+        ),
       );
     }
   }
@@ -2033,6 +2172,19 @@ class _SellerDrawer extends ConsumerWidget {
                 ),
               ],
             ),
+          ),
+          ListTile(
+            leading: const Icon(Icons.confirmation_number),
+            title: const Text('Билеты'),
+            subtitle: const Text('Сохраненные билеты'),
+            onTap: () {
+              Navigator.of(context).pop();
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (context) => const TicketsScreen(),
+                ),
+              );
+            },
           ),
           ListTile(
             leading: const Icon(Icons.settings),

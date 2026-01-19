@@ -33,9 +33,16 @@ class ExcursionsRepository {
         .toList();
   }
 
-  Future<Excursion?> fetchExcursion(int id) async {
-    final response =
-        await _client.getJson('/api/excursions/$id', authenticated: true);
+  Future<Excursion?> fetchExcursion(int id, {bool includeBookingDetails = false}) async {
+    final query = <String, dynamic>{};
+    if (includeBookingDetails) {
+      query['include_booking_details'] = true;
+    }
+    final response = await _client.getJson(
+      '/api/excursions/$id',
+      authenticated: true,
+      query: query.isEmpty ? null : query,
+    );
     final data = response['data'];
     if (data == null) {
       return null;

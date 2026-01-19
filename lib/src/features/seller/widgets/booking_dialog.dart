@@ -279,8 +279,13 @@ class _BookingDialogState extends State<BookingDialog>
                       }
 
                       if (!hasSeats) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Введите номера мест')),
+                        final rootContext = Navigator.of(context, rootNavigator: true).context;
+                        ScaffoldMessenger.of(rootContext).showSnackBar(
+                          const SnackBar(
+                            content: Text('Введите номера мест'),
+                            behavior: SnackBarBehavior.floating,
+                            margin: EdgeInsets.all(16),
+                          ),
                         );
                         return;
                       }
@@ -289,27 +294,38 @@ class _BookingDialogState extends State<BookingDialog>
                       for (final seatNum in _seatNumbers) {
                         final data = _seatData[seatNum]!;
                         if (data.nameController.text.trim().isEmpty) {
-                          ScaffoldMessenger.of(context).showSnackBar(
+                          final rootContext = Navigator.of(context, rootNavigator: true).context;
+                          ScaffoldMessenger.of(rootContext).showSnackBar(
                             SnackBar(
-                                content:
-                                    Text('Введите имя пассажира для места $seatNum')),
+                              content: Text('Введите имя пассажира для места $seatNum'),
+                              behavior: SnackBarBehavior.floating,
+                              margin: const EdgeInsets.all(16),
+                            ),
                           );
                           return;
                         }
                         if (data.phoneController.text.trim().isEmpty) {
-                          ScaffoldMessenger.of(context).showSnackBar(
+                          final rootContext = Navigator.of(context, rootNavigator: true).context;
+                          ScaffoldMessenger.of(rootContext).showSnackBar(
                             SnackBar(
-                                content:
-                                    Text('Введите телефон пассажира для места $seatNum')),
+                              content: Text('Введите телефон пассажира для места $seatNum'),
+                              behavior: SnackBarBehavior.floating,
+                              margin: const EdgeInsets.all(16),
+                            ),
                           );
                           return;
                         }
                         final tariff = widget.tariffs[data.passengerType.apiValue];
                         if (tariff == null) {
-                          ScaffoldMessenger.of(context).showSnackBar(
+                          final rootContext = Navigator.of(context, rootNavigator: true).context;
+                          ScaffoldMessenger.of(rootContext).showSnackBar(
                             SnackBar(
-                                content: Text(
-                                    'Цена для типа "${data.passengerType.label}" на месте $seatNum не настроена')),
+                              content: Text(
+                                'Цена для типа "${data.passengerType.label}" на месте $seatNum не настроена',
+                              ),
+                              behavior: SnackBarBehavior.floating,
+                              margin: const EdgeInsets.all(16),
+                            ),
                           );
                           return;
                         }
@@ -591,14 +607,18 @@ class _BookingDialogState extends State<BookingDialog>
       }
     });
 
-    // Показываем уведомление
+    // Показываем уведомление поверх диалога
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      // Используем rootNavigator для отображения поверх диалогов
+      final rootContext = Navigator.of(context, rootNavigator: true).context;
+      ScaffoldMessenger.of(rootContext).showSnackBar(
         SnackBar(
           content: Text(
             'Данные из места $sourceSeatNum скопированы на все остальные места',
           ),
           duration: const Duration(seconds: 2),
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.all(16),
         ),
       );
     }

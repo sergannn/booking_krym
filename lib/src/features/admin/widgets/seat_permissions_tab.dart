@@ -44,7 +44,11 @@ class _SeatPermissionsTabState extends ConsumerState<SeatPermissionsTab> {
       setState(() => _loading = false);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка загрузки: $e')),
+          SnackBar(
+            content: Text('Ошибка загрузки: $e'),
+            behavior: SnackBarBehavior.floating,
+            margin: const EdgeInsets.all(16),
+          ),
         );
       }
     }
@@ -91,13 +95,19 @@ class _SeatPermissionsTabState extends ConsumerState<SeatPermissionsTab> {
             content: Text(createdCount == 2 
                 ? 'Разрешения для мест 1 и 2 созданы'
                 : 'Создано разрешений: $createdCount из 2'),
+            behavior: SnackBarBehavior.floating,
+            margin: const EdgeInsets.all(16),
           ),
         );
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка: $e')),
+          SnackBar(
+            content: Text('Ошибка: $e'),
+            behavior: SnackBarBehavior.floating,
+            margin: const EdgeInsets.all(16),
+          ),
         );
       }
     }
@@ -130,13 +140,21 @@ class _SeatPermissionsTabState extends ConsumerState<SeatPermissionsTab> {
       _loadPermissions();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Разрешение удалено')),
+          const SnackBar(
+            content: Text('Разрешение удалено'),
+            behavior: SnackBarBehavior.floating,
+            margin: EdgeInsets.all(16),
+          ),
         );
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка: $e')),
+          SnackBar(
+            content: Text('Ошибка: $e'),
+            behavior: SnackBarBehavior.floating,
+            margin: const EdgeInsets.all(16),
+          ),
         );
       }
     }

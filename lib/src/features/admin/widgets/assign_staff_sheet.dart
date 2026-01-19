@@ -184,12 +184,20 @@ class _AssignStaffSheetState extends ConsumerState<AssignStaffSheet> {
         return;
       }
       messenger.showSnackBar(
-        const SnackBar(content: Text('Назначения обновлены')),
+        const SnackBar(
+          content: Text('Назначения обновлены'),
+          behavior: SnackBarBehavior.floating,
+          margin: EdgeInsets.all(16),
+        ),
       );
       Navigator.of(context).pop(true);
     } catch (error) {
       messenger.showSnackBar(
-        SnackBar(content: Text('Ошибка: $error')),
+        SnackBar(
+          content: Text('Ошибка: $error'),
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.all(16),
+        ),
       );
     } finally {
       if (mounted) {

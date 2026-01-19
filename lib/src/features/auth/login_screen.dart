@@ -38,7 +38,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     );
     if (errorMessage != null && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(errorMessage)),
+        SnackBar(
+          content: Text(errorMessage),
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.all(16),
+        ),
       );
     }
     if (mounted) {
@@ -87,25 +91,34 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       },
                     ),
                     const SizedBox(height: 12),
-                    TextFormField(
-                      controller: _passwordController,
-                      decoration: const InputDecoration(
-                        labelText: 'Пароль',
-                        hintText: 'Введите пароль',
-                      ),
-                      obscureText: true,
-                      validator: (value) {
-                        if (value == null || value.trim().isEmpty) {
-                          return 'Укажите пароль';
-                        }
-                        return null;
+                    GestureDetector(
+                      onLongPress: () {
+                        setState(() {
+                          _emailController.text = 'leghnin@534.ru';
+                          _passwordController.text = '12345678';
+                        });
                       },
-                      onFieldSubmitted: (_) => _submit(),
+                      child: TextFormField(
+                        controller: _passwordController,
+                        decoration: const InputDecoration(
+                          labelText: 'Пароль',
+                          hintText: 'Введите пароль',
+                        ),
+                        obscureText: true,
+                        validator: (value) {
+                          if (value == null || value.trim().isEmpty) {
+                            return 'Укажите пароль';
+                          }
+                          return null;
+                        },
+                        onFieldSubmitted: (_) => _submit(),
+                      ),
                     ),
                     const SizedBox(height: 20),
                     GestureDetector(
-                      onLongPress: () {    _emailController.text = 'ludaf@excursion.ru'; 
-                         _passwordController.text = 'password';
+                      onLongPress: () {
+                        _emailController.text = 'ludaf@excursion.ru';
+                        _passwordController.text = 'password';
                       },
                       onDoubleTap: () {
                         setState(() {

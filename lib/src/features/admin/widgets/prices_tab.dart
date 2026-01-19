@@ -181,6 +181,8 @@ class PricesTab extends ConsumerWidget {
                                           content: Text(
                                             'Цены для «${excursion.title}» обновлены',
                                           ),
+                                          behavior: SnackBarBehavior.floating,
+                                          margin: const EdgeInsets.all(16),
                                         ),
                                       );
                                     }

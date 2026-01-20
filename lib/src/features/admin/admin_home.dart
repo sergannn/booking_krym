@@ -47,11 +47,21 @@ class AdminHomePage extends ConsumerWidget {
     // Отслеживаем статус интернета
     final internetStatusAsync = ref.watch(internetStatusProvider);
     final hasInternet = internetStatusAsync.valueOrNull ?? true;
-    
-    // Определяем цвет фона AppBar в зависимости от статуса интернета
-    final appBarColor = hasInternet 
-        ? Theme.of(context).colorScheme.primary 
-        : Colors.red;
+
+    // Определяем цвет фона AppBar - используем персональный цвет пользователя или цвет темы
+    Color? userColor;
+    if (user.color != null && user.color!.isNotEmpty) {
+      try {
+        userColor = Color(int.parse(user.color!.replaceFirst('#', ''), radix: 16) + 0xFF000000);
+      } catch (e) {
+        // Если не удалось распарсить цвет, используем null
+      }
+    }
+
+    final appBarColor = userColor ??
+        (hasInternet
+            ? Theme.of(context).colorScheme.primary
+            : Colors.red);
 
     return DefaultTabController(
       length: 3,

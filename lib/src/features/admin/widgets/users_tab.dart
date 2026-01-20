@@ -161,8 +161,18 @@ class _UsersTabState extends ConsumerState<UsersTab>
               final user = filtered[index];
               return ListTile(
                 leading: CircleAvatar(
+                  backgroundColor: user.color != null && user.color!.isNotEmpty
+                      ? (() {
+                          try {
+                            return Color(int.parse(user.color!.replaceFirst('#', ''), radix: 16) + 0xFF000000);
+                          } catch (e) {
+                            return Theme.of(context).colorScheme.primary;
+                          }
+                        })()
+                      : Theme.of(context).colorScheme.primary,
                   child: Text(
-                      user.name.isNotEmpty ? user.name[0].toUpperCase() : '?'),
+                      user.name.isNotEmpty ? user.name[0].toUpperCase() : '?',
+                      style: const TextStyle(color: Colors.white)),
                 ),
                 title: Text(user.name),
                 subtitle: Column(

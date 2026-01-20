@@ -45,11 +45,21 @@ class _SellerHomePageState extends ConsumerState<SellerHomePage> {
     // Отслеживаем статус интернета
     final internetStatusAsync = ref.watch(internetStatusProvider);
     final hasInternet = internetStatusAsync.valueOrNull ?? true;
-    
-    // Определяем цвет фона AppBar в зависимости от статуса интернета
-    final appBarColor = hasInternet 
-        ? Theme.of(context).colorScheme.primary 
-        : Colors.red;
+
+    // Определяем цвет фона AppBar - используем персональный цвет пользователя или цвет темы
+    Color? userColor;
+    if (widget.user.color != null && widget.user.color!.isNotEmpty) {
+      try {
+        userColor = Color(int.parse(widget.user.color!.replaceFirst('#', ''), radix: 16) + 0xFF000000);
+      } catch (e) {
+        // Если не удалось распарсить цвет, используем null
+      }
+    }
+
+    final appBarColor = userColor ??
+        (hasInternet
+            ? Theme.of(context).colorScheme.primary
+            : Colors.red);
 
     return Scaffold(
       appBar: AppBar(
@@ -580,41 +590,109 @@ class _ExcursionTile extends ConsumerWidget {
         final bookingId = response.firstBookingId;
         if (bookingId != null) {
           // Получаем все ID бронирований из ответа
+          print('Booking response: bookings count = ${response.bookings?.length ?? 0}');
+          print('Booking response: bookings = ${response.bookings}');
+          
           final allBookingIds = response.bookings
-              ?.map((b) => b['id'] as int?)
+              ?.map((b) {
+                final id = b['id'];
+                print('Extracting booking ID: $id (type: ${id.runtimeType})');
+                return id is int ? id : (id is num ? id.toInt() : null);
+              })
               .whereType<int>()
               .toList();
+          
+          print('Extracted booking IDs: $allBookingIds (count: ${allBookingIds?.length ?? 0})');
           
           // Получаем информацию о первом бронировании для сохранения метаданных
           final firstBooking = response.bookings?.first;
           SavedTicket? ticketInfo;
-          if (firstBooking != null) {
-            final excursionData = firstBooking['excursion'] as Map<String, dynamic>?;
-            final stopData = firstBooking['stop'] as Map<String, dynamic>?;
-            final dateTime = firstBooking['date_time'] as String?;
+          if (firstBooking != null && allBookingIds != null && allBookingIds.isNotEmpty) {
+            // Получаем данные остановки из локального списка
+            final stopId = firstBooking['stop_id'] as int?;
+            String stopName = 'Не указана';
+            if (stopId != null) {
+              try {
+                final stopsAsync = await ref.read(stopsFutureProvider.future);
+                if (stopsAsync.isNotEmpty) {
+                  final stop = stopsAsync.firstWhere(
+                    (s) => s.id == stopId,
+                    orElse: () => stopsAsync.first,
+                  );
+                  stopName = stop.name;
+                }
+              } catch (e) {
+                // Игнорируем ошибку, используем значение по умолчанию
+              }
+            }
             
-            // Подсчитываем количество мест и общую сумму
-            final seatCount = allBookingIds?.length ?? 1;
-            double totalAmount = 0;
+            // Получаем дату/время из первого бронирования
+            final dateTimeStr = firstBooking['date_time'] as String?;
+            String excursionDateStr;
+            if (dateTimeStr != null && dateTimeStr.isNotEmpty) {
+              try {
+                final dateTime = DateTime.parse(dateTimeStr);
+                excursionDateStr = DateFormat('dd.MM.yyyy HH:mm').format(dateTime);
+              } catch (e) {
+                excursionDateStr = formatter.format(excursion.dateTime);
+              }
+            } else {
+              excursionDateStr = formatter.format(excursion.dateTime);
+            }
+            
+            // Получаем имя и телефон клиента
+            // В новом формате используем данные из первого места из seats
+            // В старом формате используем result.customerName/customerPhone
+            String customerName;
+            String customerPhone;
+            if (result.seats != null && result.seats!.isNotEmpty) {
+              // Новый формат: берем данные из первого места
+              customerName = result.seats!.first.customerName ?? result.customerName;
+              customerPhone = result.seats!.first.customerPhone ?? result.customerPhone;
+            } else {
+              // Старый формат: используем общие данные
+              customerName = result.customerName;
+              customerPhone = result.customerPhone;
+            }
+            
+            // Подсчитываем количество мест и общую сумму из всех бронирований
+            final seatCount = allBookingIds.length;
+            double totalAmount = 0.0;
             if (response.bookings != null) {
               for (var booking in response.bookings!) {
                 final price = booking['price'];
                 if (price != null) {
-                  totalAmount += (price is num) ? price.toDouble() : double.tryParse(price.toString()) ?? 0;
+                  if (price is num) {
+                    totalAmount += price.toDouble();
+                  } else if (price is String) {
+                    totalAmount += double.tryParse(price) ?? 0.0;
+                  }
+                }
+              }
+            }
+            
+            // Если сумма равна 0, пытаемся получить из тарифов
+            if (totalAmount <= 0 && result.seats != null && result.seats!.isNotEmpty) {
+              for (var seat in result.seats!) {
+                final tariff = excursion.tariffs[seat.passengerType.apiValue];
+                if (tariff != null) {
+                  if (seat.withEntry) {
+                    totalAmount += tariff.priceWithEntry ?? tariff.price ?? 0.0;
+                  } else {
+                    totalAmount += tariff.priceWithoutEntry ?? tariff.price ?? 0.0;
+                  }
                 }
               }
             }
             
             ticketInfo = SavedTicket(
               bookingId: bookingId,
-              ticketNumber: 'T-${excursionData?['id'] ?? 0}-$bookingId-${DateTime.now().millisecondsSinceEpoch}',
-              excursionTitle: excursionData?['title'] as String? ?? excursion.title,
-              excursionDate: dateTime != null 
-                  ? DateFormat('dd.MM.yyyy HH:mm').format(DateTime.parse(dateTime))
-                  : formatter.format(excursion.dateTime),
-              stopName: stopData?['name'] as String? ?? 'Не указана',
-              customerName: result.customerName,
-              customerPhone: result.customerPhone,
+              ticketNumber: 'T-${excursion.id}-$bookingId-${DateTime.now().millisecondsSinceEpoch}',
+              excursionTitle: excursion.title,
+              excursionDate: excursionDateStr,
+              stopName: stopName,
+              customerName: customerName,
+              customerPhone: customerPhone,
               fileName: 'ticket-$bookingId-${DateTime.now().millisecondsSinceEpoch}.pdf',
               savedAt: DateTime.now(),
               seatCount: seatCount,
@@ -623,11 +701,18 @@ class _ExcursionTile extends ConsumerWidget {
           }
           
           // Скачиваем PDF как байты, передавая все ID бронирований
+          // Убеждаемся, что allBookingIds не null и не пустой
+          final idsToSend = (allBookingIds != null && allBookingIds.isNotEmpty) 
+              ? allBookingIds 
+              : [bookingId];
+          
+          print('PDF download: sending bookingIds = $idsToSend (count: ${idsToSend.length})');
+          
           final pdfBytes = await ref
               .read(bookingsRepositoryProvider)
               .downloadTicketPdf(
                 bookingId,
-                bookingIds: allBookingIds,
+                bookingIds: idsToSend,
               );
           // Сохраняем/отправляем PDF (на мобильных) или скачиваем (на веб)
           await PdfDownloader.saveAndSharePdf(

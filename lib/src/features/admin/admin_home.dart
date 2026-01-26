@@ -2332,16 +2332,33 @@ class _AdminSeatsGrid extends StatelessWidget {
         if (seat.status == 'booked' || hasBooking) {
           print('🔍 Место №${seat.seatNumber}:');
           print('   Статус: ${seat.status}');
+          print('   bookedBy: ${seat.bookedBy}');
+          print('   bookedAt: ${seat.bookedAt}');
+          print('   booking объект: ${booking != null ? "✅ НЕ NULL" : "❌ NULL"}');
+          print('   booking тип: ${booking.runtimeType}');
+          if (booking != null) {
+            print('   booking.customerName: "${booking.customerName}"');
+            print('   booking.customerPhone: "${booking.customerPhone}"');
+            print('   booking.passengerType: "${booking.passengerType}"');
+          }
           print('   Продавец найден: ${seat.bookedByInfo != null ? "✅ ДА" : "❌ НЕТ"}');
           if (seat.bookedByInfo != null) {
             print('   Имя продавца: ${seat.bookedByInfo!.name}');
             print('   Цвет продавца: ${seat.bookedByInfo!.color ?? "не задан"}');
+            print('   ID продавца: ${seat.bookedByInfo!.id}');
           }
+          print('   hasBooking: $hasBooking');
           print('   Информация о клиенте найдена: ${hasBooking ? "✅ ДА" : "❌ НЕТ"}');
           if (hasBooking) {
             print('   Имя клиента: ${booking.customerName}');
             print('   Телефон клиента: ${booking.customerPhone}');
             print('   Тип пассажира: ${booking.passengerType}');
+          } else {
+            print('   ⚠️ ПРОБЛЕМА: Место занято, но booking = null!');
+            print('   Возможные причины:');
+            print('     1. API не возвращает booking для этого места');
+            print('     2. Парсинг модели BusSeat не работает');
+            print('     3. Данные фильтруются где-то в коде');
           }
           print('');
         }

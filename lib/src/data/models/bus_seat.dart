@@ -18,10 +18,31 @@ class BusSeat {
   final BusSeatBookedByInfo? bookedByInfo; // Информация о том, кто забронировал
 
   factory BusSeat.fromJson(Map<String, dynamic> json) {
+    final seatNumber = (json['seat_number'] as num?)?.toInt() ?? 0;
+    final status = json['status'] as String;
+    final hasBookingInJson = json['booking'] != null;
+    final hasBookedByInfoInJson = json['booked_by_info'] != null;
+    
+    // Отладка парсинга для занятых мест
+    if (status == 'booked') {
+      print('📦 ПАРСИНГ Место №$seatNumber из JSON:');
+      print('   status: $status');
+      print('   booked_by: ${json['booked_by']}');
+      print('   booking в JSON: ${hasBookingInJson ? "✅ ЕСТЬ" : "❌ НЕТ"}');
+      if (hasBookingInJson) {
+        print('   booking данные: ${json['booking']}');
+      }
+      print('   booked_by_info в JSON: ${hasBookedByInfoInJson ? "✅ ЕСТЬ" : "❌ НЕТ"}');
+      if (hasBookedByInfoInJson) {
+        print('   booked_by_info данные: ${json['booked_by_info']}');
+      }
+      print('');
+    }
+    
     return BusSeat(
       id: (json['id'] as num?)?.toInt() ?? 0,
-      seatNumber: (json['seat_number'] as num?)?.toInt() ?? 0,
-      status: json['status'] as String,
+      seatNumber: seatNumber,
+      status: status,
       bookedBy: json['booked_by'] as int?,
       bookedAt: json['booked_at'] == null
           ? null

@@ -2327,6 +2327,25 @@ class _AdminSeatsGrid extends StatelessWidget {
       children: sorted.map((seat) {
         final booking = seat.booking;
         final hasBooking = booking != null;
+        
+        // Отладочная информация для занятых мест
+        if (seat.status == 'booked' || hasBooking) {
+          print('🔍 Место №${seat.seatNumber}:');
+          print('   Статус: ${seat.status}');
+          print('   Продавец найден: ${seat.bookedByInfo != null ? "✅ ДА" : "❌ НЕТ"}');
+          if (seat.bookedByInfo != null) {
+            print('   Имя продавца: ${seat.bookedByInfo!.name}');
+            print('   Цвет продавца: ${seat.bookedByInfo!.color ?? "не задан"}');
+          }
+          print('   Информация о клиенте найдена: ${hasBooking ? "✅ ДА" : "❌ НЕТ"}');
+          if (hasBooking) {
+            print('   Имя клиента: ${booking.customerName}');
+            print('   Телефон клиента: ${booking.customerPhone}');
+            print('   Тип пассажира: ${booking.passengerType}');
+          }
+          print('');
+        }
+        
         final label = StringBuffer()
           ..write(seat.seatNumber);
         if (hasBooking && booking.customerName.isNotEmpty) {

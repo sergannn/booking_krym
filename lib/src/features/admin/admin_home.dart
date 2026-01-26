@@ -2379,11 +2379,13 @@ class _AdminSeatsGrid extends StatelessWidget {
                 ? 'Свободно' 
                 : 'Занято');
 
-        // Используем цвет продавца только если есть бронирование для этой даты
-        // Если места свободно для этой даты, не показываем цвет продавца
+        // Используем цвет продавца если место занято и есть информация о продавце с цветом
+        // Цвет показываем если: есть booking ИЛИ (status == 'booked' И есть bookedByInfo с цветом)
         Color seatColor;
-        if (hasBooking && seat.bookedByInfo?.color != null && seat.bookedByInfo!.color!.isNotEmpty) {
-          // Есть бронирование для этой даты - показываем цвет продавца
+        final hasBookedByInfoWithColor = seat.bookedByInfo?.color != null && seat.bookedByInfo!.color!.isNotEmpty;
+        
+        if ((hasBooking || seat.status == 'booked') && hasBookedByInfoWithColor) {
+          // Есть бронирование или место занято - показываем цвет продавца
           try {
             final hexColor = seat.bookedByInfo!.color!;
             seatColor = Color(int.parse(hexColor.substring(1), radix: 16) + 0xFF000000);
@@ -2392,7 +2394,7 @@ class _AdminSeatsGrid extends StatelessWidget {
             seatColor = Colors.blue.shade100;
           }
         } else {
-          // Нет бронирования для этой даты - используем стандартные цвета
+          // Нет информации о продавце или место свободно - используем стандартные цвета
           seatColor = seat.status == 'available'
               ? Colors.green.shade100
               : Colors.red.shade100;

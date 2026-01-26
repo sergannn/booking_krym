@@ -2377,7 +2377,9 @@ class _AdminSeatsGrid extends StatelessWidget {
               ].where((e) => e.isNotEmpty).join('\n')
             : (seat.status == 'available' 
                 ? 'Свободно' 
-                : 'Занято');
+                : (seat.bookedByInfo?.name.isNotEmpty ?? false
+                    ? seat.bookedByInfo!.name
+                    : 'Занято'));
 
         // Используем цвет продавца если место занято и есть информация о продавце с цветом
         // Цвет показываем если: есть booking ИЛИ (status == 'booked' И есть bookedByInfo с цветом)

@@ -2372,8 +2372,13 @@ class _AdminSeatsGrid extends StatelessWidget {
                 if (passengerTypeText.isNotEmpty) passengerTypeText,
                 if (booking.stopTitle?.isNotEmpty ?? false)
                   booking.stopTitle!,
-                if (booking.customerPhone.isNotEmpty) booking.customerPhone,
-                ...sellerInfo,
+                // Имя продавца и телефон клиента рядом
+                if (sellerInfo.isNotEmpty && booking.customerPhone.isNotEmpty)
+                  '${sellerInfo.first} • ${booking.customerPhone}'
+                else if (sellerInfo.isNotEmpty)
+                  sellerInfo.first
+                else if (booking.customerPhone.isNotEmpty)
+                  booking.customerPhone,
               ].where((e) => e.isNotEmpty).join('\n')
             : (seat.status == 'available' 
                 ? 'Свободно' 

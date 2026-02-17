@@ -15,6 +15,7 @@ class PricesTab extends ConsumerWidget {
     'senior': 'Пенсионер',
     'disabled': 'Инвалид',
     'special': 'Спеццена',
+    'concession': 'Льготный',
   };
 
   @override
@@ -70,9 +71,10 @@ class PricesTab extends ConsumerWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          ..._typeLabels.entries.map(
-                            (entry) {
-                              final tariff = excursion.tariffs[entry.key];
+                          ...['adult', 'child', 'senior', 'disabled', 'special', 'concession'].map(
+                            (typeKey) {
+                              final label = _typeLabels[typeKey] ?? typeKey;
+                              final tariff = excursion.tariffs[typeKey];
                               final priceWithout = tariff?.priceWithoutEntry ??
                                   tariff?.price ??
                                   0;
@@ -84,7 +86,7 @@ class PricesTab extends ConsumerWidget {
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
-                                      entry.value,
+                                      label,
                                       style: const TextStyle(
                                         fontWeight: FontWeight.w600,
                                         fontSize: 14,
@@ -226,13 +228,14 @@ class _PriceEditDialogState extends ConsumerState<PriceEditDialog> {
   bool _isSubmitting = false;
   String? _errorMessage;
 
-  static const _typeOrder = ['adult', 'child', 'senior', 'disabled', 'special'];
+  static const _typeOrder = ['adult', 'child', 'senior', 'disabled', 'special', 'concession'];
   static const _labels = <String, String>{
     'adult': 'Взрослый',
     'child': 'Детский',
     'senior': 'Пенсионер',
     'disabled': 'Инвалид',
     'special': 'Спеццена',
+    'concession': 'Льготный',
   };
 
   @override

@@ -187,7 +187,9 @@ class BookingsRepository {
       queryParams = {
         'ids': bookingIds, // Передаем массив напрямую
       };
-      print('PDF download: path=$path, bookingIds=$bookingIds');
+      print('PDF download: path=$path');
+      print('PDF download: bookingIds=$bookingIds (count: ${bookingIds.length})');
+      print('PDF download: bookingIds types: ${bookingIds.map((id) => id.runtimeType).toList()}');
     } else {
       print('PDF download: no bookingIds provided, using single booking $bookingId');
     }
@@ -200,6 +202,10 @@ class BookingsRepository {
         'Accept': 'application/pdf',
       },
     );
+    
+    print('PDF download: response status = ${response.statusCode}');
+    print('PDF download: response headers = ${response.headers}');
+    
     return Uint8List.fromList(response.bodyBytes);
   }
 }

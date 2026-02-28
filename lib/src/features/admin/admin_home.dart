@@ -7,6 +7,7 @@ import '../../data/models/excursion.dart';
 import '../../data/models/user.dart';
 import '../../data/models/booking.dart';
 import '../../data/models/bus_seat.dart';
+import '../../data/models/bus.dart';
 import '../../data/models/wallet.dart';
 import '../../data/repositories/bookings_repository.dart';
 import '../../data/repositories/excursions_repository.dart';
@@ -1657,6 +1658,15 @@ class _AdminExcursionCard extends ConsumerWidget {
                 //   constraints: const BoxConstraints(),
                 //       onPressed: () => _book(context, ref),
                 //     ),
+                 IconButton(
+              icon: const Icon(Icons.directions_bus, size: 20),
+                  tooltip: 'Автобусы экскурсии',
+              padding: const EdgeInsets.all(8),
+              constraints: const BoxConstraints(),
+                  onPressed: excursion.isCancelled
+                      ? null
+                      : () => _showExcursionBuses(context, ref),
+                ),
                 IconButton(
               icon: const Icon(Icons.list, size: 20),
                   tooltip: excursion.isCancelled ? 'Экскурсия отменена' : 'Выбрать места',
@@ -2170,6 +2180,227 @@ class _AdminExcursionCard extends ConsumerWidget {
     if (result == true) {
       ref.invalidate(excursionsFutureProvider);
     }
+  }
+
+  Future<void> _showExcursionBuses(BuildContext context, WidgetRef ref) async {
+    // Получаем водителей назначенных на эту экскурсию
+    final drivers = excursion.assignedStaff
+        .where((s) => s.roleInExcursion == 'driver')
+        .toList();
+
+    if (drivers.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('На эту экскурсию не назначено ни одного водителя'),
+          behavior: SnackBarBehavior.floating,
+          margin: EdgeInsets.all(16),
+        ),
+      );
+      return;
+    }
+
+    // Загружаем все автобусы
+    List<Bus> allBuses = [];
+    try {
+      allBuses = await ref.read(busesRepositoryProvider).fetchBuses(isActive: true);
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Ошибка загрузки автобусов: $e'),
+            behavior: SnackBarBehavior.floating,
+            margin: const EdgeInsets.all(16),
+          ),
+        );
+      }
+      return;
+    }
+
+    // Фильтруем автобусы по водителям экскурсии
+    final driverIds = drivers.map((d) => d.id).toSet();
+    final excursionBuses = allBuses.where((bus) {
+      if (bus.drivers == null || bus.drivers!.isEmpty) return false;
+      return bus.drivers!.any((d) => driverIds.contains(d.id));
+    }).toList();
+
+    if (!context.mounted) return;
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (dialogContext) => _ExcursionBusesSheet(
+        excursionTitle: excursion.title,
+        drivers: drivers,
+        buses: excursionBuses,
+      ),
+    );
+  }
+}
+
+class _ExcursionBusesSheet extends StatelessWidget {
+  const _ExcursionBusesSheet({
+    required this.excursionTitle,
+    required this.drivers,
+    required this.buses,
+  });
+
+  final String excursionTitle;
+  final List<ExcursionStaff> drivers;
+  final List<Bus> buses;
+
+  @override
+  Widget build(BuildContext context) {
+    return DraggableScrollableSheet(
+      initialChildSize: 0.6,
+      minChildSize: 0.4,
+      maxChildSize: 0.9,
+      expand: false,
+      builder: (context, controller) {
+        return Material(
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+          clipBehavior: Clip.antiAlias,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                child: Text(
+                  'Автобусы — $excursionTitle',
+                  style: Theme.of(context)
+                      .textTheme
+                      .titleMedium
+                      ?.copyWith(fontWeight: FontWeight.bold),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Text(
+                  'Водители: ${drivers.map((d) => d.name).join(', ')}',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                ),
+              ),
+              const Divider(height: 24),
+              Expanded(
+                child: buses.isEmpty
+                    ? Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(24),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.directions_bus_outlined,
+                                size: 48,
+                                color: Theme.of(context).colorScheme.outlineVariant,
+                              ),
+                              const SizedBox(height: 12),
+                              Text(
+                                'Автобусы не найдены',
+                                style: Theme.of(context).textTheme.bodyLarge,
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                'Привяжите автобусы к водителям в разделе «Автобусы»',
+                                textAlign: TextAlign.center,
+                                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                    ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      )
+                    : ListView.separated(
+                        controller: controller,
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        itemCount: buses.length,
+                        separatorBuilder: (_, __) => const Divider(height: 16),
+                        itemBuilder: (context, index) {
+                          final bus = buses[index];
+                          return Card(
+                            margin: EdgeInsets.zero,
+                            child: Padding(
+                              padding: const EdgeInsets.all(16),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.all(10),
+                                    decoration: BoxDecoration(
+                                      color: Theme.of(context).colorScheme.primaryContainer,
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Icon(
+                                      Icons.directions_bus,
+                                      color: Theme.of(context).colorScheme.onPrimaryContainer,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          '№${bus.number}',
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .titleSmall
+                                              ?.copyWith(fontWeight: FontWeight.bold),
+                                        ),
+                                        if (bus.model != null) ...[
+                                          const SizedBox(height: 2),
+                                          Text(bus.model!,
+                                              style: Theme.of(context).textTheme.bodySmall),
+                                        ],
+                                        if (bus.licensePlate != null) ...[
+                                          const SizedBox(height: 2),
+                                          Text(
+                                            bus.licensePlate!,
+                                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                                ),
+                                          ),
+                                        ],
+                                        const SizedBox(height: 4),
+                                        Row(
+                                          children: [
+                                            Icon(Icons.people_outline,
+                                                size: 14,
+                                                color: Theme.of(context).colorScheme.onSurfaceVariant),
+                                            const SizedBox(width: 4),
+                                            Text(
+                                              'Мест: ${bus.capacity}',
+                                              style: Theme.of(context).textTheme.bodySmall,
+                                            ),
+                                          ],
+                                        ),
+                                        if (bus.drivers != null && bus.drivers!.isNotEmpty) ...[
+                                          const SizedBox(height: 4),
+                                          Text(
+                                            'Водители: ${bus.drivers!.map((d) => d.name).join(', ')}',
+                                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                                ),
+                                          ),
+                                        ],
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+              ),
+              const SizedBox(height: 16),
+            ],
+          ),
+        );
+      },
+    );
   }
 }
 

@@ -1672,7 +1672,9 @@ class _AdminExcursionCard extends ConsumerWidget {
                   tooltip: excursion.isCancelled ? 'Экскурсия отменена' : 'Выбрать места',
               padding: const EdgeInsets.all(8),
               constraints: const BoxConstraints(),
-                  onPressed: (excursion.busSeats.isEmpty || excursion.isCancelled)
+                  onPressed: (excursion.isCancelled ||
+                          (!excursion.assignedStaff.any((s) => s.roleInExcursion == 'driver') &&
+                              excursion.busSeats.isEmpty))
                       ? null
                       : () => _showSeatSheet(context, ref),
                 ),
@@ -2069,7 +2071,6 @@ class _AdminExcursionCard extends ConsumerWidget {
   }
 
   Future<void> _showSeatSheet(BuildContext context, WidgetRef ref) async {
-    // Проверяем, не отменена ли экскурсия
     if (excursion.isCancelled) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -2082,13 +2083,86 @@ class _AdminExcursionCard extends ConsumerWidget {
       return;
     }
 
+    // Пытаемся найти автобус через назначенных водителей
+    final drivers = excursion.assignedStaff
+        .where((s) => s.roleInExcursion == 'driver')
+        .toList();
+
+    // По умолчанию — старое поведение: показываем busSeats из БД
+    List<BusSeat> seatsToShow = excursion.busSeats;
+    int? busCapacity;
+    String busLabel = '';
+
+    if (drivers.isNotEmpty) {
+      try {
+        final allBuses =
+            await ref.read(busesRepositoryProvider).fetchBuses(isActive: true);
+        final driverIds = drivers.map((d) => d.id).toSet();
+        final matched = allBuses.where((bus) {
+          if (bus.drivers == null || bus.drivers!.isEmpty) return false;
+          return bus.drivers!.any((d) => driverIds.contains(d.id));
+        }).toList();
+
+        if (matched.isNotEmpty) {
+          final bus = matched.first;
+          if (bus.capacity > 0) {
+            busCapacity = bus.capacity;
+            busLabel = 'Автобус №${bus.number}'
+                '${bus.model != null ? " · ${bus.model}" : ""}'
+                ' · ${bus.capacity} мест';
+
+            // Строим карту реальных мест (seatNumber → BusSeat)
+            final seatMap = {for (final s in excursion.busSeats) s.seatNumber: s};
+
+            // Генерируем полный список 1..capacity
+            seatsToShow = List.generate(bus.capacity, (i) {
+              final num = i + 1;
+              return seatMap[num] ??
+                  BusSeat(id: 0, seatNumber: num, status: 'available');
+            });
+          }
+        }
+      } catch (_) {
+        // при ошибке используем busSeats из API (старое поведение)
+      }
+    }
+
+    if (seatsToShow.isEmpty) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Нет данных о местах'),
+            behavior: SnackBarBehavior.floating,
+            margin: EdgeInsets.all(16),
+          ),
+        );
+      }
+      return;
+    }
+
     final selectedSeats = <int>{};
+
+    if (!context.mounted) return;
 
     final result = await showDialog<List<int>>(
       context: context,
       builder: (dialogContext) => StatefulBuilder(
         builder: (context, setState) => AlertDialog(
-          title: const Text('Схема мест'),
+          title: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('Выбор мест'),
+              if (busLabel.isNotEmpty)
+                Text(
+                  busLabel,
+                  style: const TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey,
+                      fontWeight: FontWeight.normal),
+                ),
+            ],
+          ),
           content: ConstrainedBox(
             constraints: const BoxConstraints(maxHeight: 500),
             child: SingleChildScrollView(
@@ -2096,7 +2170,7 @@ class _AdminExcursionCard extends ConsumerWidget {
                 spacing: 8,
                 runSpacing: 8,
                 alignment: WrapAlignment.center,
-                children: excursion.busSeats.map((seat) {
+                children: seatsToShow.map((seat) {
                   final isAvailable = seat.status == 'available';
                   final isSelected = selectedSeats.contains(seat.seatNumber);
                   final color = isSelected
@@ -2132,9 +2206,7 @@ class _AdminExcursionCard extends ConsumerWidget {
           actions: [
             if (selectedSeats.isNotEmpty)
               TextButton(
-                onPressed: () {
-                  setState(() => selectedSeats.clear());
-                },
+                onPressed: () => setState(() => selectedSeats.clear()),
                 child: const Text('Очистить'),
               ),
             TextButton(

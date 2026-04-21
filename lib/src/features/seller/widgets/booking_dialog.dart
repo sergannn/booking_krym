@@ -75,6 +75,7 @@ class _BookingDialogState extends State<BookingDialog>
     for (final data in _seatData.values) {
       data.nameController.dispose();
       data.phoneController.dispose();
+      data.manualPriceController.dispose();
     }
     super.dispose();
   }
@@ -242,6 +243,11 @@ class _BookingDialogState extends State<BookingDialog>
                     double total = 0;
                     for (final seatNum in _seatNumbers) {
                       final data = _seatData[seatNum]!;
+                      final manualPrice = data.manualPrice;
+                      if (data.useManualPrice && manualPrice != null) {
+                        total += manualPrice;
+                        continue;
+                      }
                       final tariff =
                           widget.tariffs[data.passengerType.apiValue];
                       if (tariff != null) {
@@ -315,8 +321,22 @@ class _BookingDialogState extends State<BookingDialog>
                           );
                           return;
                         }
+                        if (data.useManualPrice) {
+                          final manualPrice = data.manualPrice;
+                          if (manualPrice == null) {
+                            final rootContext = Navigator.of(context, rootNavigator: true).context;
+                            ScaffoldMessenger.of(rootContext).showSnackBar(
+                              SnackBar(
+                                content: Text('Введите корректную цену для места $seatNum'),
+                                behavior: SnackBarBehavior.floating,
+                                margin: const EdgeInsets.all(16),
+                              ),
+                            );
+                            return;
+                          }
+                        }
                         final tariff = widget.tariffs[data.passengerType.apiValue];
-                        if (tariff == null) {
+                        if (!data.useManualPrice && tariff == null) {
                           final rootContext = Navigator.of(context, rootNavigator: true).context;
                           ScaffoldMessenger.of(rootContext).showSnackBar(
                             SnackBar(
@@ -338,6 +358,7 @@ class _BookingDialogState extends State<BookingDialog>
                           seatNumber: seatNum,
                           passengerType: data.passengerType,
                           withEntry: data.withEntry,
+                          price: data.useManualPrice ? data.manualPrice : null,
                           customerName: data.nameController.text.trim(),
                           customerPhone: data.phoneController.text.trim(),
                         );
@@ -477,8 +498,67 @@ class _BookingDialogState extends State<BookingDialog>
             false,
           ),
           const SizedBox(height: 16),
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            title: const Text('Своя цена'),
+            subtitle: const Text('Продавец вводит любую цену вручную'),
+            value: data.useManualPrice,
+            onChanged: (value) {
+              setState(() {
+                data.useManualPrice = value;
+                if (!value) {
+                  data.manualPriceController.clear();
+                }
+              });
+            },
+          ),
+          if (data.useManualPrice) ...[
+            const SizedBox(height: 8),
+            TextFormField(
+              controller: data.manualPriceController,
+              decoration: const InputDecoration(
+                labelText: 'Цена вручную',
+                hintText: 'Например, 1350',
+                suffixText: '₽',
+              ),
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              validator: (value) {
+                if (!data.useManualPrice) {
+                  return null;
+                }
+                final normalized = value?.trim().replaceAll(',', '.');
+                final parsed = normalized == null || normalized.isEmpty
+                    ? null
+                    : double.tryParse(normalized);
+                if (parsed == null || parsed < 0) {
+                  return 'Введите корректную цену';
+                }
+                return null;
+              },
+            ),
+            const SizedBox(height: 16),
+          ],
           Builder(
             builder: (context) {
+              if (data.useManualPrice) {
+                final manualPrice = data.manualPrice;
+                if (manualPrice != null) {
+                  return Text(
+                    'Цена: ${manualPrice.toStringAsFixed(2)} ₽',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                    ),
+                  );
+                }
+                return const Text(
+                  'Введите цену вручную',
+                  style: TextStyle(
+                    color: Colors.red,
+                    fontWeight: FontWeight.w600,
+                  ),
+                );
+              }
               final tariff = widget.tariffs[data.passengerType.apiValue];
               if (tariff != null) {
                 final price = data.withEntry
@@ -603,6 +683,9 @@ class _BookingDialogState extends State<BookingDialog>
           // Копируем тип пассажира и флаг входного билета
           targetData.passengerType = sourceData.passengerType;
           targetData.withEntry = sourceData.withEntry;
+          targetData.useManualPrice = sourceData.useManualPrice;
+          targetData.manualPriceController.text =
+              sourceData.manualPriceController.text;
         }
       }
     });
@@ -661,12 +744,23 @@ class _BookingDialogState extends State<BookingDialog>
 class _SeatPassengerData {
   _SeatPassengerData()
       : nameController = TextEditingController(),
-        phoneController = TextEditingController();
+        phoneController = TextEditingController(),
+        manualPriceController = TextEditingController();
 
   final TextEditingController nameController;
   final TextEditingController phoneController;
+  final TextEditingController manualPriceController;
   PassengerType passengerType = PassengerType.adult;
   bool withEntry = false; // Определяется автоматически на основе выбранной категории
+  bool useManualPrice = false;
+
+  double? get manualPrice {
+    final normalized = manualPriceController.text.trim().replaceAll(',', '.');
+    if (normalized.isEmpty) {
+      return null;
+    }
+    return double.tryParse(normalized);
+  }
 }
 
 class BookingDialogResult {

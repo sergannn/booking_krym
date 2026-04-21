@@ -9,6 +9,7 @@ class SeatBooking {
     required this.seatNumber,
     required this.passengerType,
     this.withEntry = false,
+    this.price,
     this.customerName,
     this.customerPhone,
   });
@@ -16,6 +17,7 @@ class SeatBooking {
   final int seatNumber;
   final PassengerType passengerType;
   final bool withEntry;
+  final double? price;
   final String? customerName; // Имя пассажира для этого места
   final String? customerPhone; // Телефон пассажира для этого места
 
@@ -24,6 +26,7 @@ class SeatBooking {
       'seat_number': seatNumber,
       'passenger_type': passengerType.apiValue,
       'with_entry': withEntry,
+      if (price != null) 'price': price,
       if (customerName != null) 'customer_name': customerName,
       if (customerPhone != null) 'customer_phone': customerPhone,
     };

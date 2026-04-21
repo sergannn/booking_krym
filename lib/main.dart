@@ -1,9 +1,7 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'src/app.dart';
 import 'package:sentry_flutter/sentry_flutter.dart';
-import 'dart:js_interop';
-import 'package:web/web.dart' as web;
+
 
 Future<void> main() async {
   

@@ -656,11 +656,13 @@ class _MyBookingsSubTabState extends ConsumerState<_MyBookingsSubTab>
         final newGroups = <BookingGroup>[];
         final oldGroups = <BookingGroup>[];
 
+        final todayStart = DateTime(now.year, now.month, now.day);
+
         for (final group in myGroups) {
-          if (group.excursion.dateTime.isAfter(now)) {
-            newGroups.add(group);
-          } else {
+          if (group.excursion.dateTime.isBefore(todayStart)) {
             oldGroups.add(group);
+          } else {
+            newGroups.add(group);
           }
         }
 

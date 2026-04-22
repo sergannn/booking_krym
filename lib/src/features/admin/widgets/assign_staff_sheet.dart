@@ -64,94 +64,138 @@ class _AssignStaffSheetState extends ConsumerState<AssignStaffSheet> {
         return Material(
           borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
           clipBehavior: Clip.antiAlias,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          child: Stack(
             children: [
-              Padding(
-                padding: const EdgeInsets.all(16),
-                child: Text(
-                  'Назначить персонал — ${widget.excursion.title}',
-                  style: Theme.of(context)
-                      .textTheme
-                      .titleMedium
-                      ?.copyWith(fontWeight: FontWeight.bold),
-                ),
-              ),
-              Expanded(
-                child: usersAsync.when(
-                  loading: () => const Center(
-                    child: CircularProgressIndicator(),
-                  ),
-                  error: (error, _) => Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Text('Ошибка загрузки пользователей: $error'),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Text(
+                      'Назначить персонал — ${widget.excursion.title}',
+                      style: Theme.of(context)
+                          .textTheme
+                          .titleMedium
+                          ?.copyWith(fontWeight: FontWeight.bold),
                     ),
                   ),
-                  data: (users) {
-                    final drivers = users
-                        .where((user) =>
-                            user.roleName.toLowerCase().contains('водител'))
-                        .toList();
-                    final guides = users
-                        .where((user) =>
-                            user.roleName.toLowerCase().contains('экскурсов'))
-                        .toList();
-
-                    return ListView(
-                      controller: controller,
-                      padding: const EdgeInsets.all(16),
-                      children: [
-                        _StaffSection(
-                          title: 'Водители',
-                          users: drivers,
-                          selected: _selectedDrivers,
-                          onChanged: (update) => setState(() {
-                            update(_selectedDrivers);
-                          }),
+                  Expanded(
+                    child: usersAsync.when(
+                      loading: () => const Center(
+                        child: CircularProgressIndicator(),
+                      ),
+                      error: (error, _) => Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Text('Ошибка загрузки пользователей: $error'),
                         ),
-                        const SizedBox(height: 24),
-                        _StaffSection(
-                          title: 'Экскурсоводы',
-                          users: guides,
-                          selected: _selectedGuides,
-                          onChanged: (update) => setState(() {
-                            update(_selectedGuides);
-                          }),
+                      ),
+                      data: (users) {
+                        final drivers = users
+                            .where((user) =>
+                                user.roleName.toLowerCase().contains('водител'))
+                            .toList();
+                        final guides = users
+                            .where((user) =>
+                                user.roleName.toLowerCase().contains('экскурсов'))
+                            .toList();
+
+                        return ListView(
+                          controller: controller,
+                          padding: const EdgeInsets.all(16),
+                          children: [
+                            _StaffSection(
+                              title: 'Водители',
+                              users: drivers,
+                              selected: _selectedDrivers,
+                              onChanged: (update) => setState(() {
+                                update(_selectedDrivers);
+                              }),
+                            ),
+                            const SizedBox(height: 24),
+                            _StaffSection(
+                              title: 'Экскурсоводы',
+                              users: guides,
+                              selected: _selectedGuides,
+                              onChanged: (update) => setState(() {
+                                update(_selectedGuides);
+                              }),
+                            ),
+                          ],
+                        );
+                      },
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Row(
+                      children: [
+                        TextButton(
+                          onPressed: _isSubmitting
+                              ? null
+                              : () => Navigator.of(context).pop(),
+                          child: const Text('Отмена'),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: FilledButton(
+                            onPressed: _isSubmitting ? null : _submit,
+                            child: _isSubmitting
+                                ? const SizedBox(
+                                    width: 20,
+                                    height: 20,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: Colors.white,
+                                    ),
+                                  )
+                                : const Text('Сохранить'),
+                          ),
                         ),
                       ],
-                    );
-                  },
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.all(16),
-                child: Row(
-                  children: [
-                    TextButton(
-                      onPressed: _isSubmitting
-                          ? null
-                          : () => Navigator.of(context).pop(),
-                      child: const Text('Отмена'),
                     ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: FilledButton(
-                        onPressed: _isSubmitting ? null : _submit,
-                        child: _isSubmitting
-                            ? const SizedBox(
-                                width: 20,
-                                height: 20,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                ),
-                              )
-                            : const Text('Сохранить'),
+                  ),
+                ],
+              ),
+              if (_isSubmitting)
+                Positioned.fill(
+                  child: AbsorbPointer(
+                    child: ColoredBox(
+                      color: Colors.black26,
+                      child: Center(
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 20,
+                            vertical: 16,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Theme.of(context).colorScheme.surface,
+                            borderRadius: BorderRadius.circular(16),
+                            boxShadow: const [
+                              BoxShadow(
+                                color: Colors.black12,
+                                blurRadius: 12,
+                                offset: Offset(0, 4),
+                              ),
+                            ],
+                          ),
+                          child: const Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              SizedBox(
+                                width: 28,
+                                height: 28,
+                                child: CircularProgressIndicator(strokeWidth: 3),
+                              ),
+                              SizedBox(height: 12),
+                              Text('Сохраняем назначения...'),
+                            ],
+                          ),
+                        ),
                       ),
                     ),
-                  ],
+                  ),
                 ),
-              ),
             ],
           ),
         );

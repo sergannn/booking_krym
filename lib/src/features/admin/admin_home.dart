@@ -2086,7 +2086,7 @@ class _AdminExcursionCard extends ConsumerWidget {
     }
 
     // Пытаемся найти автобус через назначенных водителей
-    final drivers = excursion.assignedStaff
+    final drivers = _filteredStaff
         .where((s) => s.roleInExcursion == 'driver')
         .toList();
 
@@ -2258,7 +2258,7 @@ class _AdminExcursionCard extends ConsumerWidget {
 
   Future<void> _showExcursionBuses(BuildContext context, WidgetRef ref) async {
     // Получаем водителей назначенных на эту экскурсию
-    final drivers = excursion.assignedStaff
+    final drivers = _filteredStaff
         .where((s) => s.roleInExcursion == 'driver')
         .toList();
 

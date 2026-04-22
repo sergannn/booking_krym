@@ -522,6 +522,9 @@ class _BookingDialogState extends State<BookingDialog>
                 suffixText: '₽',
               ),
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              onChanged: (_) {
+                setState(() {});
+              },
               validator: (value) {
                 if (!data.useManualPrice) {
                   return null;

@@ -130,4 +130,48 @@ class BusesRepository {
       rethrow;
     }
   }
+
+  Future<void> assignToExcursion({
+    required int busId,
+    required int excursionId,
+    required int driverId,
+    required String excursionDate,
+    required String time,
+  }) async {
+    try {
+      await _client.postJson(
+        '/api/buses/$busId/assign-excursion',
+        authenticated: true,
+        body: {
+          'excursion_id': excursionId,
+          'driver_id': driverId,
+          'excursion_date': excursionDate,
+          'time': time,
+        },
+      );
+    } on ApiException {
+      rethrow;
+    }
+  }
+
+  Future<void> unassignFromExcursion({
+    required int busId,
+    required int excursionId,
+    required String excursionDate,
+    required String time,
+  }) async {
+    try {
+      await _client.postJson(
+        '/api/buses/$busId/unassign-excursion',
+        authenticated: true,
+        body: {
+          'excursion_id': excursionId,
+          'excursion_date': excursionDate,
+          'time': time,
+        },
+      );
+    } on ApiException {
+      rethrow;
+    }
+  }
 }

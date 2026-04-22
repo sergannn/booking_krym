@@ -1548,17 +1548,28 @@ class _AdminExcursionCard extends ConsumerWidget {
   final User user;
   final int index;
 
+  String get _targetDate => DateFormat('yyyy-MM-dd').format(excursion.dateTime);
+
+  String get _targetTime => DateFormat('HH:mm').format(excursion.dateTime);
+
   /// Фильтрует персонал по дате/времени экскурсии
   List<ExcursionStaff> get _filteredStaff {
-    final targetDate = DateFormat('yyyy-MM-dd').format(excursion.dateTime);
-    final targetTime = DateFormat('HH:mm').format(excursion.dateTime);
-    
     return excursion.assignedStaff.where((staff) {
       // Показываем назначения без даты (на все даты) или с совпадающей датой
-      final matchesDate = staff.excursionDate == null || staff.excursionDate == targetDate;
-      final matchesTime = staff.time == null || staff.time == targetTime;
+      final matchesDate = staff.excursionDate == null || staff.excursionDate == _targetDate;
+      final matchesTime = staff.time == null || staff.time == _targetTime;
       return matchesDate && matchesTime;
     }).toList();
+  }
+
+  List<ExcursionBusAssignment> get _filteredBusAssignments {
+    return excursion.busAssignments.where((assignment) {
+      final matchesDate =
+          assignment.excursionDate == null || assignment.excursionDate == _targetDate;
+      final matchesTime = assignment.time == null || assignment.time == _targetTime;
+      return matchesDate && matchesTime;
+    }).toList()
+      ..sort((a, b) => a.seatFrom.compareTo(b.seatFrom));
   }
 
   @override
@@ -1674,9 +1685,7 @@ class _AdminExcursionCard extends ConsumerWidget {
                   tooltip: excursion.isCancelled ? 'Экскурсия отменена' : 'Выбрать места',
               padding: const EdgeInsets.all(8),
               constraints: const BoxConstraints(),
-                  onPressed: (excursion.isCancelled ||
-                          (!excursion.assignedStaff.any((s) => s.roleInExcursion == 'driver') &&
-                              excursion.busSeats.isEmpty))
+                  onPressed: (excursion.isCancelled || excursion.busSeats.isEmpty)
                       ? null
                       : () => _showSeatSheet(context, ref),
                 ),
@@ -2085,49 +2094,20 @@ class _AdminExcursionCard extends ConsumerWidget {
       return;
     }
 
-    // Пытаемся найти автобус через назначенных водителей
-    final drivers = _filteredStaff
-        .where((s) => s.roleInExcursion == 'driver')
-        .toList();
-
-    // По умолчанию — старое поведение: показываем busSeats из БД
     List<BusSeat> seatsToShow = excursion.busSeats;
-    int? busCapacity;
-    String busLabel = '';
-
-    if (drivers.isNotEmpty) {
-      try {
-        final allBuses =
-            await ref.read(busesRepositoryProvider).fetchBuses(isActive: true);
-        final driverIds = drivers.map((d) => d.id).toSet();
-        final matched = allBuses.where((bus) {
-          if (bus.drivers == null || bus.drivers!.isEmpty) return false;
-          return bus.drivers!.any((d) => driverIds.contains(d.id));
-        }).toList();
-
-        if (matched.isNotEmpty) {
-          final bus = matched.first;
-          if (bus.capacity > 0) {
-            busCapacity = bus.capacity;
-            busLabel = 'Автобус №${bus.number}'
-                '${bus.model != null ? " · ${bus.model}" : ""}'
-                ' · ${bus.capacity} мест';
-
-            // Строим карту реальных мест (seatNumber → BusSeat)
-            final seatMap = {for (final s in excursion.busSeats) s.seatNumber: s};
-
-            // Генерируем полный список 1..capacity
-            seatsToShow = List.generate(bus.capacity, (i) {
-              final num = i + 1;
-              return seatMap[num] ??
-                  BusSeat(id: 0, seatNumber: num, status: 'available');
-            });
-          }
-        }
-      } catch (_) {
-        // при ошибке используем busSeats из API (старое поведение)
-      }
-    }
+    final busAssignmentLines = _filteredBusAssignments
+        .map((assignment) {
+          final bus = assignment.bus;
+          final driverName = assignment.driver?.name;
+          final busText = bus == null
+              ? 'Автобус'
+              : 'Автобус №${bus.number}${bus.model != null ? " · ${bus.model}" : ""}';
+          final seatsText = 'места ${assignment.seatFrom}-${assignment.seatTo}';
+          final driverText =
+              driverName == null || driverName.isEmpty ? '' : ' · $driverName';
+          return '$busText · $seatsText$driverText';
+        })
+        .toList();
 
     if (seatsToShow.isEmpty) {
       if (context.mounted) {
@@ -2155,13 +2135,25 @@ class _AdminExcursionCard extends ConsumerWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               const Text('Выбор мест'),
-              if (busLabel.isNotEmpty)
-                Text(
-                  busLabel,
-                  style: const TextStyle(
+              if (busAssignmentLines.isNotEmpty)
+                ...busAssignmentLines.map(
+                  (line) => Text(
+                    line,
+                    style: const TextStyle(
                       fontSize: 12,
                       color: Colors.grey,
-                      fontWeight: FontWeight.normal),
+                      fontWeight: FontWeight.normal,
+                    ),
+                  ),
+                )
+              else
+                const Text(
+                  'Автобус на эту дату пока не назначен. Места остаются общими.',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey,
+                    fontWeight: FontWeight.normal,
+                  ),
                 ),
             ],
           ),
@@ -2257,23 +2249,6 @@ class _AdminExcursionCard extends ConsumerWidget {
   }
 
   Future<void> _showExcursionBuses(BuildContext context, WidgetRef ref) async {
-    // Получаем водителей назначенных на эту экскурсию
-    final drivers = _filteredStaff
-        .where((s) => s.roleInExcursion == 'driver')
-        .toList();
-
-    if (drivers.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('На эту экскурсию не назначено ни одного водителя'),
-          behavior: SnackBarBehavior.floating,
-          margin: EdgeInsets.all(16),
-        ),
-      );
-      return;
-    }
-
-    // Загружаем все автобусы
     List<Bus> allBuses = [];
     try {
       allBuses = await ref.read(busesRepositoryProvider).fetchBuses(isActive: true);
@@ -2290,38 +2265,145 @@ class _AdminExcursionCard extends ConsumerWidget {
       return;
     }
 
-    // Фильтруем автобусы по водителям экскурсии
-    final driverIds = drivers.map((d) => d.id).toSet();
-    final excursionBuses = allBuses.where((bus) {
-      if (bus.drivers == null || bus.drivers!.isEmpty) return false;
-      return bus.drivers!.any((d) => driverIds.contains(d.id));
-    }).toList();
-
     if (!context.mounted) return;
 
-    await showModalBottomSheet<void>(
+    final updated = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (dialogContext) => _ExcursionBusesSheet(
+        excursionId: excursion.id,
         excursionTitle: excursion.title,
-        drivers: drivers,
-        buses: excursionBuses,
+        excursionDate: _targetDate,
+        excursionTime: _targetTime,
+        currentAssignments: _filteredBusAssignments,
+        availableBuses: allBuses,
       ),
     );
+
+    if (updated == true) {
+      ref.invalidate(excursionsFutureProvider);
+    }
   }
 }
 
-class _ExcursionBusesSheet extends StatelessWidget {
+class _ExcursionBusesSheet extends ConsumerStatefulWidget {
   const _ExcursionBusesSheet({
+    required this.excursionId,
     required this.excursionTitle,
-    required this.drivers,
-    required this.buses,
+    required this.excursionDate,
+    required this.excursionTime,
+    required this.currentAssignments,
+    required this.availableBuses,
   });
 
+  final int excursionId;
   final String excursionTitle;
-  final List<ExcursionStaff> drivers;
-  final List<Bus> buses;
+  final String excursionDate;
+  final String excursionTime;
+  final List<ExcursionBusAssignment> currentAssignments;
+  final List<Bus> availableBuses;
+
+  @override
+  ConsumerState<_ExcursionBusesSheet> createState() => _ExcursionBusesSheetState();
+}
+
+class _ExcursionBusesSheetState extends ConsumerState<_ExcursionBusesSheet> {
+  int? _selectedBusId;
+  int? _selectedDriverId;
+  bool _submitting = false;
+
+  Bus? get _selectedBus {
+    if (_selectedBusId == null) return null;
+    for (final bus in widget.availableBuses) {
+      if (bus.id == _selectedBusId) return bus;
+    }
+    return null;
+  }
+
+  List<Bus> get _assignableBuses {
+    final assignedBusIds = widget.currentAssignments.map((e) => e.busId).toSet();
+    return widget.availableBuses
+        .where((bus) => !assignedBusIds.contains(bus.id))
+        .where((bus) => (bus.drivers?.isNotEmpty ?? false))
+        .toList()
+      ..sort((a, b) => a.number.compareTo(b.number));
+  }
+
+  Future<void> _assignBus() async {
+    final bus = _selectedBus;
+    final driverId = _selectedDriverId;
+    if (bus == null || driverId == null) {
+      return;
+    }
+
+    setState(() => _submitting = true);
+    try {
+      await ref.read(busesRepositoryProvider).assignToExcursion(
+            busId: bus.id,
+            excursionId: widget.excursionId,
+            driverId: driverId,
+            excursionDate: widget.excursionDate,
+            time: widget.excursionTime,
+          );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Автобус назначен на эту дату'),
+          behavior: SnackBarBehavior.floating,
+          margin: EdgeInsets.all(16),
+        ),
+      );
+      Navigator.of(context).pop(true);
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Не удалось назначить автобус: $error'),
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.all(16),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _submitting = false);
+      }
+    }
+  }
+
+  Future<void> _unassignBus(ExcursionBusAssignment assignment) async {
+    setState(() => _submitting = true);
+    try {
+      await ref.read(busesRepositoryProvider).unassignFromExcursion(
+            busId: assignment.busId,
+            excursionId: widget.excursionId,
+            excursionDate: widget.excursionDate,
+            time: widget.excursionTime,
+          );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Автобус снят с этой даты'),
+          behavior: SnackBarBehavior.floating,
+          margin: EdgeInsets.all(16),
+        ),
+      );
+      Navigator.of(context).pop(true);
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Не удалось снять автобус: $error'),
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.all(16),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _submitting = false);
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -2340,7 +2422,7 @@ class _ExcursionBusesSheet extends StatelessWidget {
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
                 child: Text(
-                  'Автобусы — $excursionTitle',
+                  'Автобусы — ${widget.excursionTitle}',
                   style: Theme.of(context)
                       .textTheme
                       .titleMedium
@@ -2350,7 +2432,7 @@ class _ExcursionBusesSheet extends StatelessWidget {
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: Text(
-                  'Водители: ${drivers.map((d) => d.name).join(', ')}',
+                  'Дата: ${widget.excursionDate} · ${widget.excursionTime}',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                         color: Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
@@ -2358,7 +2440,7 @@ class _ExcursionBusesSheet extends StatelessWidget {
               ),
               const Divider(height: 24),
               Expanded(
-                child: buses.isEmpty
+                child: widget.currentAssignments.isEmpty
                     ? Center(
                         child: Padding(
                           padding: const EdgeInsets.all(24),
@@ -2372,12 +2454,12 @@ class _ExcursionBusesSheet extends StatelessWidget {
                               ),
                               const SizedBox(height: 12),
                               Text(
-                                'Автобусы не найдены',
+                                'Автобусы на эту дату не назначены',
                                 style: Theme.of(context).textTheme.bodyLarge,
                               ),
                               const SizedBox(height: 4),
                               Text(
-                                'Привяжите автобусы к водителям в разделе «Автобусы»',
+                                'Ниже можно назначить автобус и выделить ему следующий свободный диапазон мест.',
                                 textAlign: TextAlign.center,
                                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                                       color: Theme.of(context).colorScheme.onSurfaceVariant,
@@ -2390,10 +2472,12 @@ class _ExcursionBusesSheet extends StatelessWidget {
                     : ListView.separated(
                         controller: controller,
                         padding: const EdgeInsets.symmetric(horizontal: 16),
-                        itemCount: buses.length,
+                        itemCount: widget.currentAssignments.length,
                         separatorBuilder: (_, __) => const Divider(height: 16),
                         itemBuilder: (context, index) {
-                          final bus = buses[index];
+                          final assignment = widget.currentAssignments[index];
+                          final bus = assignment.bus;
+                          final driverName = assignment.driver?.name ?? 'Водитель не указан';
                           return Card(
                             margin: EdgeInsets.zero,
                             child: Padding(
@@ -2417,21 +2501,21 @@ class _ExcursionBusesSheet extends StatelessWidget {
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
                                         Text(
-                                          '№${bus.number}',
+                                          bus == null ? 'Автобус #${assignment.busId}' : '№${bus.number}',
                                           style: Theme.of(context)
                                               .textTheme
                                               .titleSmall
                                               ?.copyWith(fontWeight: FontWeight.bold),
                                         ),
-                                        if (bus.model != null) ...[
+                                        if (bus?.model != null) ...[
                                           const SizedBox(height: 2),
-                                          Text(bus.model!,
+                                          Text(bus!.model!,
                                               style: Theme.of(context).textTheme.bodySmall),
                                         ],
-                                        if (bus.licensePlate != null) ...[
+                                        if (bus?.licensePlate != null) ...[
                                           const SizedBox(height: 2),
                                           Text(
-                                            bus.licensePlate!,
+                                            bus!.licensePlate!,
                                             style: Theme.of(context).textTheme.bodySmall?.copyWith(
                                                   color: Theme.of(context).colorScheme.onSurfaceVariant,
                                                 ),
@@ -2445,22 +2529,36 @@ class _ExcursionBusesSheet extends StatelessWidget {
                                                 color: Theme.of(context).colorScheme.onSurfaceVariant),
                                             const SizedBox(width: 4),
                                             Text(
-                                              'Мест: ${bus.capacity}',
+                                              'Места: ${assignment.seatFrom}-${assignment.seatTo}',
                                               style: Theme.of(context).textTheme.bodySmall,
                                             ),
                                           ],
                                         ),
-                                        if (bus.drivers != null && bus.drivers!.isNotEmpty) ...[
-                                          const SizedBox(height: 4),
-                                          Text(
-                                            'Водители: ${bus.drivers!.map((d) => d.name).join(', ')}',
-                                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                                                ),
-                                          ),
-                                        ],
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          'Водитель: $driverName',
+                                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                                color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                              ),
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          'Выделено мест: ${assignment.allocatedSeats}',
+                                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                                color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                              ),
+                                        ),
                                       ],
                                     ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  IconButton(
+                                    onPressed: _submitting
+                                        ? null
+                                        : () => _unassignBus(assignment),
+                                    tooltip: 'Снять автобус',
+                                    icon: const Icon(Icons.close),
+                                    color: Colors.red,
                                   ),
                                 ],
                               ),
@@ -2468,6 +2566,95 @@ class _ExcursionBusesSheet extends StatelessWidget {
                           );
                         },
                       ),
+              ),
+              const Divider(height: 1),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Назначить автобус на эту дату',
+                      style: Theme.of(context)
+                          .textTheme
+                          .titleSmall
+                          ?.copyWith(fontWeight: FontWeight.w600),
+                    ),
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<int>(
+                      value: _selectedBusId,
+                      decoration: const InputDecoration(
+                        labelText: 'Автобус',
+                        border: OutlineInputBorder(),
+                      ),
+                      items: _assignableBuses
+                          .map(
+                            (bus) => DropdownMenuItem<int>(
+                              value: bus.id,
+                              child: Text(
+                                '№${bus.number}${bus.model != null ? " · ${bus.model}" : ""} · ${bus.capacity} мест',
+                              ),
+                            ),
+                          )
+                          .toList(),
+                      onChanged: _submitting
+                          ? null
+                          : (value) {
+                              setState(() {
+                                _selectedBusId = value;
+                                final drivers = _selectedBus?.drivers ?? const [];
+                                _selectedDriverId =
+                                    drivers.length == 1 ? drivers.first.id : null;
+                              });
+                            },
+                    ),
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<int>(
+                      value: _selectedDriverId,
+                      decoration: const InputDecoration(
+                        labelText: 'Водитель',
+                        border: OutlineInputBorder(),
+                      ),
+                      items: ((_selectedBus?.drivers) ?? const [])
+                          .map(
+                            (driver) => DropdownMenuItem<int>(
+                              value: driver.id,
+                              child: Text(driver.name),
+                            ),
+                          )
+                          .toList(),
+                      onChanged: _submitting || _selectedBus == null
+                          ? null
+                          : (value) => setState(() => _selectedDriverId = value),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      _assignableBuses.isEmpty
+                          ? 'Нет свободных автобусов с привязанными водителями.'
+                          : 'Система сама выделит следующую свободную группу мест для выбранного автобуса.',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: Theme.of(context).colorScheme.onSurfaceVariant,
+                          ),
+                    ),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton.icon(
+                        onPressed: _submitting || _selectedBusId == null || _selectedDriverId == null
+                            ? null
+                            : _assignBus,
+                        icon: _submitting
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              )
+                            : const Icon(Icons.add),
+                        label: const Text('Назначить автобус'),
+                      ),
+                    ),
+                  ],
+                ),
               ),
               const SizedBox(height: 16),
             ],

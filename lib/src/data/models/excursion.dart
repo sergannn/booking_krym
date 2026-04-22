@@ -1,4 +1,6 @@
 import 'bus_seat.dart';
+import 'bus.dart';
+import 'user_summary.dart';
 
 class Excursion {
   const Excursion({
@@ -13,6 +15,7 @@ class Excursion {
     required this.bookedSeatsCount,
     required this.availableSeatsCount,
     required this.assignedStaff,
+    required this.busAssignments,
     required this.busSeats,
     required this.tariffs,
     this.staffPrices = const [],
@@ -33,6 +36,7 @@ class Excursion {
   final int bookedSeatsCount;
   final int availableSeatsCount;
   final List<ExcursionStaff> assignedStaff;
+  final List<ExcursionBusAssignment> busAssignments;
   final List<BusSeat> busSeats;
   final Map<String, ExcursionTariff> tariffs;
   final List<StaffPrice> staffPrices;
@@ -46,6 +50,7 @@ class Excursion {
   factory Excursion.fromJson(Map<String, dynamic> json) {
     final seatsJson = json['bus_seats'] as List<dynamic>?;
     final staffJson = json['assigned_staff'] as List<dynamic>?;
+    final busAssignmentsJson = json['bus_assignments'] as List<dynamic>?;
     final pricesJson = json['prices'] as List<dynamic>?;
     
     // date_time теперь может быть null (экскурсии стали шаблонами)
@@ -88,6 +93,13 @@ class Excursion {
           : staffJson
               .map((item) =>
                   ExcursionStaff.fromJson(item as Map<String, dynamic>))
+              .toList(),
+      busAssignments: busAssignmentsJson == null
+          ? const []
+          : busAssignmentsJson
+              .map((item) => ExcursionBusAssignment.fromJson(
+                    item as Map<String, dynamic>,
+                  ))
               .toList(),
       busSeats: seatsJson == null
           ? const []
@@ -188,6 +200,51 @@ class Excursion {
 
   double priceFor(String passengerType) {
     return tariffs[passengerType]?.price ?? price ?? 0.0;
+  }
+}
+
+class ExcursionBusAssignment {
+  const ExcursionBusAssignment({
+    required this.id,
+    required this.busId,
+    required this.driverId,
+    required this.excursionDate,
+    required this.time,
+    required this.seatFrom,
+    required this.seatTo,
+    required this.allocatedSeats,
+    this.bus,
+    this.driver,
+  });
+
+  final int id;
+  final int busId;
+  final int driverId;
+  final String? excursionDate;
+  final String? time;
+  final int seatFrom;
+  final int seatTo;
+  final int allocatedSeats;
+  final Bus? bus;
+  final UserSummary? driver;
+
+  factory ExcursionBusAssignment.fromJson(Map<String, dynamic> json) {
+    return ExcursionBusAssignment(
+      id: (json['id'] as num?)?.toInt() ?? 0,
+      busId: (json['bus_id'] as num?)?.toInt() ?? 0,
+      driverId: (json['driver_id'] as num?)?.toInt() ?? 0,
+      excursionDate: json['excursion_date'] as String?,
+      time: json['time'] as String?,
+      seatFrom: (json['seat_from'] as num?)?.toInt() ?? 0,
+      seatTo: (json['seat_to'] as num?)?.toInt() ?? 0,
+      allocatedSeats: (json['allocated_seats'] as num?)?.toInt() ?? 0,
+      bus: json['bus'] is Map<String, dynamic>
+          ? Bus.fromJson(json['bus'] as Map<String, dynamic>)
+          : null,
+      driver: json['driver'] is Map<String, dynamic>
+          ? UserSummary.fromJson(json['driver'] as Map<String, dynamic>)
+          : null,
+    );
   }
 }
 

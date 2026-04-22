@@ -2818,7 +2818,10 @@ class _AdminSeatingChartSheet extends ConsumerWidget {
                   return SingleChildScrollView(
                     controller: scrollController,
                     padding: const EdgeInsets.all(16),
-                    child: _AdminSeatsGrid(busSeats: excursion.busSeats),
+                    child: _AdminSeatsGrid(
+                      busSeats: excursion.busSeats,
+                      busAssignments: excursion.busAssignments,
+                    ),
                   );
                 },
                 loading: () => const Center(
@@ -2840,9 +2843,13 @@ class _AdminSeatingChartSheet extends ConsumerWidget {
 }
 
 class _AdminSeatsGrid extends StatelessWidget {
-  const _AdminSeatsGrid({required this.busSeats});
+  const _AdminSeatsGrid({
+    required this.busSeats,
+    this.busAssignments = const [],
+  });
 
   final List<BusSeat> busSeats;
+  final List<ExcursionBusAssignment> busAssignments;
 
   @override
   Widget build(BuildContext context) {
@@ -2856,6 +2863,11 @@ class _AdminSeatsGrid extends StatelessWidget {
     }
 
     final sorted = [...busSeats]..sort((a, b) => a.seatNumber.compareTo(b.seatNumber));
+    final assignedSeatNumbers = <int>{
+      for (final assignment in busAssignments)
+        for (int seat = assignment.seatFrom; seat <= assignment.seatTo; seat++)
+          seat,
+    };
 
     return Wrap(
       spacing: 8,
@@ -2978,6 +2990,7 @@ class _AdminSeatsGrid extends StatelessWidget {
               ? Colors.green.shade100
               : Colors.red.shade100;
         }
+        final isAssignedToBus = assignedSeatNumbers.contains(seat.seatNumber);
 
         return Container(
           width: 140,
@@ -2985,7 +2998,10 @@ class _AdminSeatsGrid extends StatelessWidget {
           decoration: BoxDecoration(
             color: seatColor,
             borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: Colors.grey.shade300),
+            border: Border.all(
+              color: isAssignedToBus ? Colors.indigo : Colors.grey.shade300,
+              width: isAssignedToBus ? 2 : 1,
+            ),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,

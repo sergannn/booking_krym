@@ -2108,6 +2108,11 @@ class _AdminExcursionCard extends ConsumerWidget {
           return '$busText · $seatsText$driverText';
         })
         .toList();
+    final assignedSeatNumbers = <int>{
+      for (final assignment in _filteredBusAssignments)
+        for (int seat = assignment.seatFrom; seat <= assignment.seatTo; seat++)
+          seat,
+    };
 
     if (seatsToShow.isEmpty) {
       if (context.mounted) {
@@ -2155,6 +2160,35 @@ class _AdminExcursionCard extends ConsumerWidget {
                     fontWeight: FontWeight.normal,
                   ),
                 ),
+              if (busAssignmentLines.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Container(
+                      width: 14,
+                      height: 14,
+                      decoration: BoxDecoration(
+                        border: Border.all(
+                          color: Colors.indigo,
+                          width: 2,
+                        ),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    const Expanded(
+                      child: Text(
+                        'Рамкой выделены места, уже включённые в автобус',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey,
+                          fontWeight: FontWeight.normal,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ],
           ),
           content: ConstrainedBox(
@@ -2167,6 +2201,8 @@ class _AdminExcursionCard extends ConsumerWidget {
                 children: seatsToShow.map((seat) {
                   final isAvailable = seat.status == 'available';
                   final isSelected = selectedSeats.contains(seat.seatNumber);
+                  final isAssignedToBus =
+                      assignedSeatNumbers.contains(seat.seatNumber);
                   final color = isSelected
                       ? Colors.blue.shade300
                       : isAvailable
@@ -2187,6 +2223,14 @@ class _AdminExcursionCard extends ConsumerWidget {
                     child: Chip(
                       label: Text('${seat.seatNumber}'),
                       backgroundColor: color,
+                      shape: StadiumBorder(
+                        side: isAssignedToBus
+                            ? const BorderSide(
+                                color: Colors.indigo,
+                                width: 2,
+                              )
+                            : BorderSide.none,
+                      ),
                       labelStyle: TextStyle(
                         fontWeight:
                             isSelected ? FontWeight.bold : FontWeight.normal,

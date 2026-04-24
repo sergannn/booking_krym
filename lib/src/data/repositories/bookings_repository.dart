@@ -10,6 +10,7 @@ class SeatBooking {
     required this.passengerType,
     this.withEntry = false,
     this.price,
+    this.debt,
     this.customerName,
     this.customerPhone,
   });
@@ -18,6 +19,7 @@ class SeatBooking {
   final PassengerType passengerType;
   final bool withEntry;
   final double? price;
+  final double? debt;
   final String? customerName; // Имя пассажира для этого места
   final String? customerPhone; // Телефон пассажира для этого места
 
@@ -27,6 +29,7 @@ class SeatBooking {
       'passenger_type': passengerType.apiValue,
       'with_entry': withEntry,
       if (price != null) 'price': price,
+      if (debt != null) 'debt': debt,
       if (customerName != null) 'customer_name': customerName,
       if (customerPhone != null) 'customer_phone': customerPhone,
     };

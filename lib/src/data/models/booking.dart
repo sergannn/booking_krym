@@ -118,6 +118,7 @@ class BookingItem {
     required this.excursion,
     required this.seat,
     required this.price,
+    this.debt,
     required this.customerName,
     required this.customerPhone,
     required this.passengerType,
@@ -133,6 +134,7 @@ class BookingItem {
   final BookingExcursion excursion;
   final BookingSeat seat;
   final double price;
+  final double? debt;
   final String customerName;
   final String customerPhone;
   final PassengerType passengerType;
@@ -171,6 +173,9 @@ class BookingItem {
           BookingExcursion.fromJson(json['excursion'] as Map<String, dynamic>),
       seat: parseSeat(),
       price: double.tryParse(json['price']?.toString() ?? '') ?? 0,
+      debt: json['debt'] != null
+          ? double.tryParse(json['debt'].toString())
+          : null,
       customerName: json['customer_name'] as String? ?? '',
       customerPhone: json['customer_phone']?.toString() ?? '',
       weekday: (json['weekday'] as num?)?.toInt(),

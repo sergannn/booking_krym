@@ -62,6 +62,7 @@ class BusSeatBooking {
     required this.customerName,
     required this.customerPhone,
     required this.passengerType,
+    this.debt,
     this.stopId,
     this.stopTitle,
     this.stopOrder,
@@ -70,6 +71,7 @@ class BusSeatBooking {
   final String customerName;
   final String customerPhone;
   final String passengerType;
+  final double? debt;
   final int? stopId;
   final String? stopTitle;
   final int? stopOrder;
@@ -79,6 +81,9 @@ class BusSeatBooking {
       customerName: json['customer_name'] as String? ?? '',
       customerPhone: json['customer_phone'] as String? ?? '',
       passengerType: json['passenger_type'] as String? ?? '',
+      debt: json['debt'] != null
+          ? double.tryParse(json['debt'].toString())
+          : null,
       stopId: (json['stop_id'] as num?)?.toInt(),
       stopTitle: json['stop_title'] as String?,
       stopOrder: (json['stop_order'] as num?)?.toInt(),

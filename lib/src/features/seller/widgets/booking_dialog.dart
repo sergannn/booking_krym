@@ -76,6 +76,7 @@ class _BookingDialogState extends State<BookingDialog>
       data.nameController.dispose();
       data.phoneController.dispose();
       data.manualPriceController.dispose();
+      data.debtController.dispose();
     }
     super.dispose();
   }
@@ -335,6 +336,30 @@ class _BookingDialogState extends State<BookingDialog>
                             return;
                           }
                         }
+                        final debt = data.debt;
+                        final seatPrice = data.effectivePrice(widget.tariffs);
+                        if (debt != null && debt < 0) {
+                          final rootContext = Navigator.of(context, rootNavigator: true).context;
+                          ScaffoldMessenger.of(rootContext).showSnackBar(
+                            SnackBar(
+                              content: Text('Долг для места $seatNum не может быть отрицательным'),
+                              behavior: SnackBarBehavior.floating,
+                              margin: const EdgeInsets.all(16),
+                            ),
+                          );
+                          return;
+                        }
+                        if (debt != null && seatPrice != null && debt > seatPrice) {
+                          final rootContext = Navigator.of(context, rootNavigator: true).context;
+                          ScaffoldMessenger.of(rootContext).showSnackBar(
+                            SnackBar(
+                              content: Text('Долг для места $seatNum не должен быть больше цены'),
+                              behavior: SnackBarBehavior.floating,
+                              margin: const EdgeInsets.all(16),
+                            ),
+                          );
+                          return;
+                        }
                         final tariff = widget.tariffs[data.passengerType.apiValue];
                         if (!data.useManualPrice && tariff == null) {
                           final rootContext = Navigator.of(context, rootNavigator: true).context;
@@ -359,6 +384,7 @@ class _BookingDialogState extends State<BookingDialog>
                           passengerType: data.passengerType,
                           withEntry: data.withEntry,
                           price: data.useManualPrice ? data.manualPrice : null,
+                          debt: data.debt,
                           customerName: data.nameController.text.trim(),
                           customerPhone: data.phoneController.text.trim(),
                         );
@@ -541,19 +567,39 @@ class _BookingDialogState extends State<BookingDialog>
             ),
             const SizedBox(height: 16),
           ],
+          TextFormField(
+            controller: data.debtController,
+            decoration: const InputDecoration(
+              labelText: 'Долг',
+              hintText: 'Например, 500',
+              suffixText: '₽',
+              helperText: 'Если турист оплатил не всю сумму',
+            ),
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            onChanged: (_) {
+              setState(() {});
+            },
+            validator: (value) {
+              final normalized = value?.trim().replaceAll(',', '.');
+              if (normalized == null || normalized.isEmpty) {
+                return null;
+              }
+              final parsed = double.tryParse(normalized);
+              if (parsed == null || parsed < 0) {
+                return 'Введите корректную сумму долга';
+              }
+              final seatPrice = data.effectivePrice(widget.tariffs);
+              if (seatPrice != null && parsed > seatPrice) {
+                return 'Долг не должен быть больше цены';
+              }
+              return null;
+            },
+          ),
+          const SizedBox(height: 16),
           Builder(
             builder: (context) {
-              if (data.useManualPrice) {
-                final manualPrice = data.manualPrice;
-                if (manualPrice != null) {
-                  return Text(
-                    'Цена: ${manualPrice.toStringAsFixed(2)} ₽',
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
-                    ),
-                  );
-                }
+              final effectivePrice = data.effectivePrice(widget.tariffs);
+              if (data.useManualPrice && effectivePrice == null) {
                 return const Text(
                   'Введите цену вручную',
                   style: TextStyle(
@@ -562,17 +608,38 @@ class _BookingDialogState extends State<BookingDialog>
                   ),
                 );
               }
-              final tariff = widget.tariffs[data.passengerType.apiValue];
-              if (tariff != null) {
-                final price = data.withEntry
-                    ? (tariff.priceWithEntry ?? tariff.price)
-                    : (tariff.priceWithoutEntry ?? tariff.price);
-                return Text(
-                  'Цена: ${price.toStringAsFixed(2)} ₽',
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
-                  ),
+              if (effectivePrice != null) {
+                final debt = data.debt ?? 0;
+                final paid = (effectivePrice - debt).clamp(0, effectivePrice);
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Цена: ${effectivePrice.toStringAsFixed(2)} ₽',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
+                    ),
+                    if (debt > 0) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        'Оплачено: ${paid.toStringAsFixed(2)} ₽',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: Colors.grey.shade700,
+                        ),
+                      ),
+                      Text(
+                        'Долг: ${debt.toStringAsFixed(2)} ₽',
+                        style: const TextStyle(
+                          fontSize: 13,
+                          color: Colors.red,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ],
                 );
               }
               return const Text(
@@ -689,6 +756,7 @@ class _BookingDialogState extends State<BookingDialog>
           targetData.useManualPrice = sourceData.useManualPrice;
           targetData.manualPriceController.text =
               sourceData.manualPriceController.text;
+          targetData.debtController.text = sourceData.debtController.text;
         }
       }
     });
@@ -748,11 +816,13 @@ class _SeatPassengerData {
   _SeatPassengerData()
       : nameController = TextEditingController(),
         phoneController = TextEditingController(),
-        manualPriceController = TextEditingController();
+        manualPriceController = TextEditingController(),
+        debtController = TextEditingController();
 
   final TextEditingController nameController;
   final TextEditingController phoneController;
   final TextEditingController manualPriceController;
+  final TextEditingController debtController;
   PassengerType passengerType = PassengerType.adult;
   bool withEntry = false; // Определяется автоматически на основе выбранной категории
   bool useManualPrice = false;
@@ -763,6 +833,27 @@ class _SeatPassengerData {
       return null;
     }
     return double.tryParse(normalized);
+  }
+
+  double? get debt {
+    final normalized = debtController.text.trim().replaceAll(',', '.');
+    if (normalized.isEmpty) {
+      return null;
+    }
+    return double.tryParse(normalized);
+  }
+
+  double? effectivePrice(Map<String, ExcursionTariff> tariffs) {
+    if (useManualPrice) {
+      return manualPrice;
+    }
+    final tariff = tariffs[passengerType.apiValue];
+    if (tariff == null) {
+      return null;
+    }
+    return withEntry
+        ? (tariff.priceWithEntry ?? tariff.price)
+        : (tariff.priceWithoutEntry ?? tariff.price);
   }
 }
 

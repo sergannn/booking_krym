@@ -437,18 +437,19 @@ class _NewBookingSubTabState extends ConsumerState<_NewBookingSubTab>
               child: Text('Не удалось загрузить экскурсии: $error'),
             ),
             data: (excursions) {
-              // Разделяем на предстоящие и прошедшие
+              // Разделяем на текущие/предстоящие и прошедшие.
+              // Прошедшими считаем только вчера и раньше:
+              // сегодняшние экскурсии остаются в верхнем списке даже после их окончания.
               final now = DateTime.now();
+              final todayStart = DateTime(now.year, now.month, now.day);
               final futureExcursions = <Excursion>[];
               final pastExcursions = <Excursion>[];
 
               for (final excursion in excursions) {
-                // Сравниваем полную дату и время
-                if (excursion.dateTime.isAfter(now)) {
-                  futureExcursions.add(excursion);
-                } else {
-                  // Включаем все экскурсии, которые уже прошли или происходят сейчас
+                if (excursion.dateTime.isBefore(todayStart)) {
                   pastExcursions.add(excursion);
+                } else {
+                  futureExcursions.add(excursion);
                 }
               }
 
@@ -2956,6 +2957,8 @@ class _AdminSeatsGrid extends StatelessWidget {
                 if (passengerTypeText.isNotEmpty) passengerTypeText,
                 if (booking.stopTitle?.isNotEmpty ?? false)
                   booking.stopTitle!,
+                if ((booking.debt ?? 0) > 0)
+                  'Долг: ${booking.debt!.toStringAsFixed(2)} ₽',
                 // Имя продавца и телефон клиента рядом
                 if (sellerInfo.isNotEmpty && booking.customerPhone.isNotEmpty)
                   '${sellerInfo.first} • ${booking.customerPhone}'

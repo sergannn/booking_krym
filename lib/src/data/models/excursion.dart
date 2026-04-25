@@ -272,6 +272,7 @@ class ExcursionStaff {
     required this.roleInExcursion,
     this.excursionDate,
     this.time,
+    this.isAutoGuideFromDriver = false,
   });
 
   final int id;
@@ -280,6 +281,7 @@ class ExcursionStaff {
   final String roleInExcursion; // driver | guide
   final String? excursionDate; // YYYY-MM-DD или null (на все даты)
   final String? time; // HH:MM или null (на все времена)
+  final bool isAutoGuideFromDriver;
 
   factory ExcursionStaff.fromJson(Map<String, dynamic> json) {
     return ExcursionStaff(
@@ -289,6 +291,19 @@ class ExcursionStaff {
       roleInExcursion: json['role_in_excursion'] as String? ?? '',
       excursionDate: json['excursion_date'] as String?,
       time: json['time'] as String?,
+      isAutoGuideFromDriver: false,
+    );
+  }
+
+  ExcursionStaff asAutoGuideFromDriver() {
+    return ExcursionStaff(
+      id: id,
+      name: name,
+      email: email,
+      roleInExcursion: 'guide',
+      excursionDate: excursionDate,
+      time: time,
+      isAutoGuideFromDriver: true,
     );
   }
 }

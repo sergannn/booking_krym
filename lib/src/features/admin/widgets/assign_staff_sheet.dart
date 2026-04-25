@@ -132,6 +132,11 @@ class _AssignStaffSheetState extends ConsumerState<AssignStaffSheet> {
                               .where((user) =>
                                   user.roleName.toLowerCase().contains('экскурсов'))
                               .toList();
+                          final autoGuideDrivers = _selectedGuides.isEmpty
+                              ? drivers
+                                  .where((user) => _selectedDrivers.contains(user.id))
+                                  .toList()
+                              : const <UserSummary>[];
 
                           return ListView(
                             controller: controller,
@@ -150,6 +155,7 @@ class _AssignStaffSheetState extends ConsumerState<AssignStaffSheet> {
                                 title: 'Экскурсоводы',
                                 users: guides,
                                 selected: _selectedGuides,
+                                autoGuideDrivers: autoGuideDrivers,
                                 onChanged: (update) => setState(() {
                                   update(_selectedGuides);
                                 }),
@@ -291,12 +297,14 @@ class _StaffSection extends StatelessWidget {
     required this.users,
     required this.selected,
     required this.onChanged,
+    this.autoGuideDrivers = const [],
   });
 
   final String title;
   final List<UserSummary> users;
   final Set<int> selected;
   final void Function(void Function(Set<int>)) onChanged;
+  final List<UserSummary> autoGuideDrivers;
 
   @override
   Widget build(BuildContext context) {
@@ -311,6 +319,89 @@ class _StaffSection extends StatelessWidget {
               ?.copyWith(fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 8),
+        if (title == 'Экскурсоводы' && autoGuideDrivers.isNotEmpty) ...[
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(12),
+            margin: const EdgeInsets.only(bottom: 12),
+            decoration: BoxDecoration(
+              color: Colors.indigo.withValues(alpha: 0.05),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: Colors.indigo.withValues(alpha: 0.35),
+              ),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.info_outline, size: 16, color: Colors.indigo),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Отдельный экскурсовод не назначен. Водитель автоматически считается экскурсоводом.',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: Colors.indigo.shade700,
+                              fontWeight: FontWeight.w600,
+                            ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: autoGuideDrivers
+                      .map(
+                        (user) => Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 8,
+                          ),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(999),
+                            border: Border.all(color: Colors.indigo),
+                            color: Colors.white,
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(
+                                Icons.directions_bus,
+                                size: 16,
+                                color: Colors.indigo,
+                              ),
+                              const SizedBox(width: 6),
+                              Text(
+                                user.name,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.indigo,
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              Text(
+                                'авто',
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .labelSmall
+                                    ?.copyWith(
+                                      color: Colors.indigo.shade400,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      )
+                      .toList(),
+                ),
+              ],
+            ),
+          ),
+        ],
         if (users.isEmpty)
           const Padding(
             padding: EdgeInsets.symmetric(vertical: 8),

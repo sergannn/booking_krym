@@ -1721,8 +1721,11 @@ class _AdminExcursionCard extends ConsumerWidget {
     final mode = ref.watch(staffIndicatorModeProvider);
     final drivers =
         staff.where((member) => member.roleInExcursion == 'driver').toList();
-    final guides =
+    final realGuides =
         staff.where((member) => member.roleInExcursion == 'guide').toList();
+    final guides = realGuides.isNotEmpty
+        ? realGuides
+        : drivers.map((member) => member.asAutoGuideFromDriver()).toList();
     final others = staff
         .where((member) =>
             member.roleInExcursion != 'driver' &&
@@ -1757,7 +1760,9 @@ class _AdminExcursionCard extends ConsumerWidget {
         _buildStaffChip(
           context: context,
           staff: guides,
-          tooltip: 'Экскурсоводы: ${guides.length}',
+          tooltip: realGuides.isNotEmpty
+              ? 'Экскурсоводы: ${guides.length}'
+              : 'Экскурсоводы: ${guides.length} (автоматически из водителей)',
           icon: Icons.record_voice_over,
           color: Colors.teal,
           countLabel: '${guides.length}',
@@ -1838,7 +1843,17 @@ class _AdminExcursionCard extends ConsumerWidget {
 
   void _showAllStaffDialog(BuildContext context, List<ExcursionStaff> staff) {
     final staffByRole = <String, List<ExcursionStaff>>{};
-    for (final member in staff) {
+    final drivers =
+        staff.where((member) => member.roleInExcursion == 'driver').toList();
+    final realGuides =
+        staff.where((member) => member.roleInExcursion == 'guide').toList();
+    final effectiveStaff = <ExcursionStaff>[
+      ...staff,
+      if (realGuides.isEmpty)
+        ...drivers.map((member) => member.asAutoGuideFromDriver()),
+    ];
+
+    for (final member in effectiveStaff) {
       staffByRole.putIfAbsent(member.roleInExcursion, () => []).add(member);
     }
 
@@ -1885,9 +1900,32 @@ class _AdminExcursionCard extends ConsumerWidget {
                   ...members.map(
                     (member) => Padding(
                       padding: const EdgeInsets.only(left: 24, top: 2, bottom: 2),
-                      child: Text(
-                        member.name,
-                        style: const TextStyle(fontWeight: FontWeight.w500),
+                      child: Row(
+                        children: [
+                          Flexible(
+                            child: Text(
+                              member.name,
+                              style: const TextStyle(fontWeight: FontWeight.w500),
+                            ),
+                          ),
+                          if (member.isAutoGuideFromDriver) ...[
+                            const SizedBox(width: 6),
+                            Icon(
+                              Icons.directions_bus,
+                              size: 14,
+                              color: Colors.indigo.shade400,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              'авто из водителя',
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: Colors.indigo.shade400,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
                     ),
                   ),

@@ -1986,10 +1986,19 @@ class _AdminExcursionCard extends ConsumerWidget {
 
     final stops = await ref.read(stopsFutureProvider.future);
     
-    // Получаем список продавцов для выбора (только продавцы, не админы)
+    // Получаем список пользователей для бронирования от лица продавца/партнера
     final allUsers = await ref.read(allUsersFutureProvider.future);
     final sellers = allUsers
-        .where((user) => user.roleId == 2) // role_id 2 = продавец
+        .where(
+          (user) =>
+              user.roleId == 2 || // role_id 2 = продавец
+              user.roleId == 4 || // role_id 4 = партнер
+              user.roleName.toLowerCase().contains('продав') ||
+              user.roleName.toLowerCase().contains('партнер') ||
+              user.roleName.toLowerCase().contains('партн') ||
+              user.roleName.toLowerCase().contains('seller') ||
+              user.roleName.toLowerCase().contains('partner'),
+        )
         .toList();
     
     final result = await showDialog<BookingDialogResult>(

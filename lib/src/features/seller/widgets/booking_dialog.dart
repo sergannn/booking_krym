@@ -21,7 +21,7 @@ class BookingDialog extends StatefulWidget {
   final Map<String, ExcursionTariff> tariffs;
   final List<int> initialSeatNumbers;
   final bool lockSeatSelection;
-  final List<UserSummary>? sellers; // Список продавцов для выбора
+  final List<UserSummary>? sellers; // Список продавцов/партнеров для выбора
   final int? currentUserId; // ID текущего пользователя
   final String? excursionTitle; // Название экскурсии
 
@@ -38,7 +38,7 @@ class _BookingDialogState extends State<BookingDialog>
   int? _stopId;
   Stop? _selectedStop;
   late final List<int> _seatNumbers;
-  int? _selectedSellerId; // Выбранный продавец (для админов)
+  int? _selectedSellerId; // Выбранный продавец/партнер (для админов)
 
   // Данные для каждого места: номер места -> данные пассажира
   final Map<int, _SeatPassengerData> _seatData = {};
@@ -176,13 +176,13 @@ class _BookingDialogState extends State<BookingDialog>
 
               const SizedBox(height: 16),
 
-              // Выбор продавца (только для админов)
+              // Выбор продавца/партнера (только для админов)
               if (widget.sellers != null && widget.sellers!.isNotEmpty) ...[
                 DropdownButtonFormField<int>(
                   value: _selectedSellerId,
                   decoration: const InputDecoration(
                     labelText: 'Бронировать от лица',
-                    helperText: 'Выберите продавца или себя',
+                    helperText: 'Выберите продавца, партнера или себя',
                   ),
                   items: [
                     // Опция "Я сам" (текущий пользователь)
@@ -191,12 +191,21 @@ class _BookingDialogState extends State<BookingDialog>
                         value: widget.currentUserId,
                         child: const Text('Я сам (администратор)'),
                       ),
-                    // Список продавцов
+                    // Список продавцов и партнеров
                     ...widget.sellers!.map(
-                      (seller) => DropdownMenuItem(
-                        value: seller.id,
-                        child: Text('${seller.name})') ,// (${seller.email})'),
-                      ),
+                      (seller) {
+                        final roleLabel = seller.roleName.trim().isEmpty
+                            ? null
+                            : seller.roleName;
+                        final label = roleLabel == null
+                            ? seller.name
+                            : '${seller.name} ($roleLabel)';
+
+                        return DropdownMenuItem(
+                          value: seller.id,
+                          child: Text(label),
+                        );
+                      },
                     ),
                   ],
                   onChanged: (value) {
@@ -204,8 +213,9 @@ class _BookingDialogState extends State<BookingDialog>
                       _selectedSellerId = value;
                     });
                   },
-                  validator: (value) =>
-                      value == null ? 'Выберите продавца' : null,
+                  validator: (value) => value == null
+                      ? 'Выберите продавца или партнера'
+                      : null,
                 ),
                 const SizedBox(height: 16),
               ],

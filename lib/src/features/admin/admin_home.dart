@@ -522,20 +522,25 @@ class _NewBookingSubTabState extends ConsumerState<_NewBookingSubTab>
                         ),
                         subtitle: Text(
                             '${dayItems.length} ${dayItems.length == 1 ? 'экскурсия' : dayItems.length < 5 ? 'экскурсии' : 'экскурсий'}'),
-                        children: dayItems
-                            .asMap()
-                            .entries
-                            .map((entry) => Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 8, vertical: 4),
-                                  child: _AdminExcursionCard(
-                                    excursion: entry.value,
-                                    formatter: timeFormatter,
-                                    user: widget.user,
-                                    index: entry.key,
-                                  ),
-                                ))
-                            .toList(),
+                        children: [
+                          const Padding(
+                            padding: EdgeInsets.fromLTRB(20, 8, 132, 2),
+                            child: _ExcursionsTableHeader(),
+                          ),
+                          ...dayItems
+                              .asMap()
+                              .entries
+                              .map((entry) => Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 8, vertical: 4),
+                                    child: _AdminExcursionCard(
+                                      excursion: entry.value,
+                                      formatter: timeFormatter,
+                                      user: widget.user,
+                                      index: entry.key,
+                                    ),
+                                  )),
+                        ],
                       ),
                     );
                   },
@@ -1464,6 +1469,40 @@ class _AllBookingsSubTabState extends ConsumerState<_AllBookingsSubTab>
   }
 }
 
+class _ExcursionsTableHeader extends StatelessWidget {
+  const _ExcursionsTableHeader();
+
+  @override
+  Widget build(BuildContext context) {
+    final style = Theme.of(context).textTheme.labelSmall?.copyWith(
+          fontWeight: FontWeight.w700,
+          color: Colors.blueGrey.shade600,
+          letterSpacing: 0.2,
+        );
+
+    return Row(
+      children: [
+        Expanded(
+          flex: 8,
+          child: Text('Название', style: style),
+        ),
+        Expanded(
+          flex: 2,
+          child: Text('Мест', style: style, textAlign: TextAlign.center),
+        ),
+        Expanded(
+          flex: 3,
+          child: Text('Водитель', style: style, textAlign: TextAlign.center),
+        ),
+        Expanded(
+          flex: 3,
+          child: Text('Экскурсовод', style: style, textAlign: TextAlign.center),
+        ),
+      ],
+    );
+  }
+}
+
 class _ExpandableCard extends StatefulWidget {
   const _ExpandableCard({
     required this.child,
@@ -1493,7 +1532,7 @@ class _ExpandableCardState extends State<_ExpandableCard> {
       trailing: widget.child.trailing,
       tilePadding: widget.child.tilePadding,
       childrenPadding: widget.child.childrenPadding,
-      initiallyExpanded: widget.child.initiallyExpanded ?? false,
+      initiallyExpanded: widget.child.initiallyExpanded,
       onExpansionChanged: (expanded) {
         setState(() {
           _isExpanded = expanded;
@@ -1573,6 +1612,32 @@ class _AdminExcursionCard extends ConsumerWidget {
       ..sort((a, b) => a.seatFrom.compareTo(b.seatFrom));
   }
 
+  List<ExcursionStaff> get _driversForSlot {
+    return _filteredStaff
+        .where((member) => member.roleInExcursion == 'driver')
+        .toList();
+  }
+
+  List<ExcursionStaff> get _guidesForSlot {
+    final realGuides = _filteredStaff
+        .where((member) => member.roleInExcursion == 'guide')
+        .toList();
+
+    if (realGuides.isNotEmpty) {
+      return realGuides;
+    }
+
+    return _driversForSlot.map((member) => member.asAutoGuideFromDriver()).toList();
+  }
+
+  String _staffNames(List<ExcursionStaff> staff) {
+    if (staff.isEmpty) {
+      return '—';
+    }
+
+    return staff.map((member) => member.name).join(', ');
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     // Определяем, доступна ли экскурсия для бронирования
@@ -1611,42 +1676,117 @@ class _AdminExcursionCard extends ConsumerWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Expanded(
-                        child: Column(
+                        child: Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: Text(
-                                    '${excursion.title} — ${formatter.format(excursion.dateTime)}   ' +
-                                        '${excursion.availableSeatsCount}/${excursion.maxSeats}',
-                                    style:
-                                        Theme.of(context).textTheme.bodySmall?.copyWith(
-                                          color: excursion.availableSeatsCount != excursion.maxSeats
-                                              ? Colors.blue
-                                              : Colors.black,
-                                          fontSize: 12,
+                            Expanded(
+                              flex: 8,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: Text(
+                                          excursion.title,
+                                          maxLines: 2,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .bodySmall
+                                              ?.copyWith(
+                                                color: Colors.black87,
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                        ),
+                                      ),
+                                      if (excursion.isCancelled)
+                                        Container(
+                                          margin: const EdgeInsets.only(left: 8),
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 8, vertical: 2),
+                                          decoration: BoxDecoration(
+                                            color: Colors.red,
+                                            borderRadius: BorderRadius.circular(4),
+                                          ),
+                                          child: const Text(
+                                            'ОТМЕНЕНА',
+                                            style: TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 10,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                        ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    formatter.format(excursion.dateTime),
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .bodySmall
+                                        ?.copyWith(
+                                          color: Colors.blueGrey.shade600,
+                                          fontSize: 11,
                                         ),
                                   ),
-                                ),
-                                if (excursion.isCancelled)
-                                  Container(
-                                    margin: const EdgeInsets.only(left: 8),
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                    decoration: BoxDecoration(
-                                      color: Colors.red,
-                                      borderRadius: BorderRadius.circular(4),
-                                    ),
-                                    child: const Text(
-                                      'ОТМЕНЕНА',
-                                      style: TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.bold,
+                                ],
+                              ),
+                            ),
+                            Expanded(
+                              flex: 2,
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 4),
+                                child: Text(
+                                  '${excursion.availableSeatsCount}/${excursion.maxSeats}',
+                                  textAlign: TextAlign.center,
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .bodySmall
+                                      ?.copyWith(
+                                        color:
+                                            excursion.availableSeatsCount != excursion.maxSeats
+                                                ? Colors.blue
+                                                : Colors.black87,
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w600,
                                       ),
-                                    ),
-                                  ),
-                              ],
+                                ),
+                              ),
+                            ),
+                            Expanded(
+                              flex: 3,
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 4),
+                                child: Text(
+                                  _staffNames(_driversForSlot),
+                                  textAlign: TextAlign.center,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .bodySmall
+                                      ?.copyWith(fontSize: 11),
+                                ),
+                              ),
+                            ),
+                            Expanded(
+                              flex: 3,
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 4),
+                                child: Text(
+                                  _staffNames(_guidesForSlot),
+                                  textAlign: TextAlign.center,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .bodySmall
+                                      ?.copyWith(fontSize: 11),
+                                ),
+                              ),
                             ),
                           ],
                         ),

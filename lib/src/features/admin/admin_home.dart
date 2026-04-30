@@ -524,7 +524,7 @@ class _NewBookingSubTabState extends ConsumerState<_NewBookingSubTab>
                             '${dayItems.length} ${dayItems.length == 1 ? 'экскурсия' : dayItems.length < 5 ? 'экскурсии' : 'экскурсий'}'),
                         children: [
                           const Padding(
-                            padding: EdgeInsets.fromLTRB(20, 8, 132, 2),
+                            padding: EdgeInsets.fromLTRB(20, 8, 20, 2),
                             child: _ExcursionsTableHeader(),
                           ),
                           ...dayItems
@@ -1472,32 +1472,40 @@ class _AllBookingsSubTabState extends ConsumerState<_AllBookingsSubTab>
 class _ExcursionsTableHeader extends StatelessWidget {
   const _ExcursionsTableHeader();
 
+  static const int titleFlex = 7;
+  static const int seatsFlex = 2;
+  static const int driverFlex = 3;
+  static const int guideFlex = 3;
+  static const double actionsWidth = 152;
+
   @override
   Widget build(BuildContext context) {
     final style = Theme.of(context).textTheme.labelSmall?.copyWith(
           fontWeight: FontWeight.w700,
           color: Colors.blueGrey.shade600,
           letterSpacing: 0.2,
+          fontSize: 11,
         );
 
     return Row(
       children: [
         Expanded(
-          flex: 8,
+          flex: titleFlex,
           child: Text('Название', style: style),
         ),
         Expanded(
-          flex: 2,
+          flex: seatsFlex,
           child: Text('Мест', style: style, textAlign: TextAlign.center),
         ),
         Expanded(
-          flex: 3,
+          flex: driverFlex,
           child: Text('Водитель', style: style, textAlign: TextAlign.center),
         ),
         Expanded(
-          flex: 3,
+          flex: guideFlex,
           child: Text('Экскурсовод', style: style, textAlign: TextAlign.center),
         ),
+        const SizedBox(width: actionsWidth),
       ],
     );
   }
@@ -1588,6 +1596,12 @@ class _AdminExcursionCard extends ConsumerWidget {
   final User user;
   final int index;
 
+  static const int _titleFlex = _ExcursionsTableHeader.titleFlex;
+  static const int _seatsFlex = _ExcursionsTableHeader.seatsFlex;
+  static const int _driverFlex = _ExcursionsTableHeader.driverFlex;
+  static const int _guideFlex = _ExcursionsTableHeader.guideFlex;
+  static const double _actionsWidth = _ExcursionsTableHeader.actionsWidth;
+
   String get _targetDate => DateFormat('yyyy-MM-dd').format(excursion.dateTime);
 
   String get _targetTime => DateFormat('HH:mm').format(excursion.dateTime);
@@ -1664,190 +1678,178 @@ class _AdminExcursionCard extends ConsumerWidget {
       color: cardColor,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Row(
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  flex: _titleFlex,
+                  child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Expanded(
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Expanded(
-                              flex: 8,
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    children: [
-                                      Expanded(
-                                        child: Text(
-                                          excursion.title,
-                                          maxLines: 2,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: Theme.of(context)
-                                              .textTheme
-                                              .bodySmall
-                                              ?.copyWith(
-                                                color: Colors.black87,
-                                                fontSize: 12,
-                                                fontWeight: FontWeight.w600,
-                                              ),
-                                        ),
-                                      ),
-                                      if (excursion.isCancelled)
-                                        Container(
-                                          margin: const EdgeInsets.only(left: 8),
-                                          padding: const EdgeInsets.symmetric(
-                                              horizontal: 8, vertical: 2),
-                                          decoration: BoxDecoration(
-                                            color: Colors.red,
-                                            borderRadius: BorderRadius.circular(4),
-                                          ),
-                                          child: const Text(
-                                            'ОТМЕНЕНА',
-                                            style: TextStyle(
-                                              color: Colors.white,
-                                              fontSize: 10,
-                                              fontWeight: FontWeight.bold,
-                                            ),
-                                          ),
-                                        ),
-                                    ],
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              excursion.title,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .bodySmall
+                                  ?.copyWith(
+                                    color: Colors.black87,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
                                   ),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    formatter.format(excursion.dateTime),
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .bodySmall
-                                        ?.copyWith(
-                                          color: Colors.blueGrey.shade600,
-                                          fontSize: 11,
-                                        ),
-                                  ),
-                                ],
-                              ),
                             ),
-                            Expanded(
-                              flex: 2,
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 4),
-                                child: Text(
-                                  '${excursion.availableSeatsCount}/${excursion.maxSeats}',
-                                  textAlign: TextAlign.center,
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .bodySmall
-                                      ?.copyWith(
-                                        color:
-                                            excursion.availableSeatsCount != excursion.maxSeats
-                                                ? Colors.blue
-                                                : Colors.black87,
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w600,
-                                      ),
+                          ),
+                          if (excursion.isCancelled)
+                            Container(
+                              margin: const EdgeInsets.only(left: 6),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: Colors.red,
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: const Text(
+                                'ОТМЕНЕНА',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
                                 ),
                               ),
                             ),
-                            Expanded(
-                              flex: 3,
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 4),
-                                child: Text(
-                                  _staffNames(_driversForSlot),
-                                  textAlign: TextAlign.center,
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .bodySmall
-                                      ?.copyWith(fontSize: 11),
-                                ),
-                              ),
-                            ),
-                            Expanded(
-                              flex: 3,
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 4),
-                                child: Text(
-                                  _staffNames(_guidesForSlot),
-                                  textAlign: TextAlign.center,
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .bodySmall
-                                      ?.copyWith(fontSize: 11),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
+                        ],
                       ),
-                      if (_filteredStaff.isNotEmpty)
-                        Wrap(
-                          spacing: 6,
-                          runSpacing: 6,
-                          alignment: WrapAlignment.end,
-                          children: _buildStaffIndicators(context, ref),
-                        ),
+                      const SizedBox(height: 2),
+                      Text(
+                        formatter.format(excursion.dateTime),
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: Colors.blueGrey.shade600,
+                              fontSize: 11,
+                            ),
+                      ),
                     ],
                   ),
-                  const SizedBox(height: 4),
-                ],
+                ),
+                Expanded(
+                  flex: _seatsFlex,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    child: Text(
+                      '${excursion.availableSeatsCount}/${excursion.maxSeats}',
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: excursion.availableSeatsCount != excursion.maxSeats
+                                ? Colors.blue
+                                : Colors.black87,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                    ),
+                  ),
+                ),
+                Expanded(
+                  flex: _driverFlex,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    child: Text(
+                      _staffNames(_driversForSlot),
+                      textAlign: TextAlign.center,
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context)
+                          .textTheme
+                          .bodySmall
+                          ?.copyWith(fontSize: 11, height: 1.25),
+                    ),
+                  ),
+                ),
+                Expanded(
+                  flex: _guideFlex,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    child: Text(
+                      _staffNames(_guidesForSlot),
+                      textAlign: TextAlign.center,
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context)
+                          .textTheme
+                          .bodySmall
+                          ?.copyWith(fontSize: 11, height: 1.25),
+                    ),
+                  ),
+                ),
+                SizedBox(
+                  width: _actionsWidth,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.directions_bus, size: 20),
+                        tooltip: 'Автобусы экскурсии',
+                        padding: const EdgeInsets.all(8),
+                        constraints: const BoxConstraints(),
+                        onPressed: excursion.isCancelled
+                            ? null
+                            : () => _showExcursionBuses(context, ref),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.list, size: 20),
+                        tooltip: excursion.isCancelled
+                            ? 'Экскурсия отменена'
+                            : 'Выбрать места',
+                        padding: const EdgeInsets.all(8),
+                        constraints: const BoxConstraints(),
+                        onPressed: (excursion.isCancelled || excursion.busSeats.isEmpty)
+                            ? null
+                            : () => _showSeatSheet(context, ref),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.event_seat, size: 20),
+                        tooltip: excursion.isCancelled
+                            ? 'Экскурсия отменена'
+                            : 'Схема рассадки',
+                        padding: const EdgeInsets.all(8),
+                        constraints: const BoxConstraints(),
+                        onPressed: (excursion.busSeats.isEmpty || excursion.isCancelled)
+                            ? null
+                            : () => _showSeatingChart(context, ref),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.person_add, size: 20),
+                        tooltip: excursion.isCancelled
+                            ? 'Экскурсия отменена'
+                            : 'Назначить персонал',
+                        padding: const EdgeInsets.all(8),
+                        constraints: const BoxConstraints(),
+                        onPressed: excursion.isCancelled
+                            ? null
+                            : () => _assignStaff(context, ref),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            if (_filteredStaff.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Align(
+                alignment: Alignment.centerRight,
+                child: Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  alignment: WrapAlignment.end,
+                  children: _buildStaffIndicators(context, ref),
+                ),
               ),
-            ),
-            const SizedBox(width: 4),
-                // IconButton(
-                //   icon: const Icon(Icons.event_seat, size: 20),
-                //       tooltip: 'Забронировать',
-                //   padding: const EdgeInsets.all(8),
-                //   constraints: const BoxConstraints(),
-                //       onPressed: () => _book(context, ref),
-                //     ),
-                 IconButton(
-              icon: const Icon(Icons.directions_bus, size: 20),
-                  tooltip: 'Автобусы экскурсии',
-              padding: const EdgeInsets.all(8),
-              constraints: const BoxConstraints(),
-                  onPressed: excursion.isCancelled
-                      ? null
-                      : () => _showExcursionBuses(context, ref),
-                ),
-                IconButton(
-              icon: const Icon(Icons.list, size: 20),
-                  tooltip: excursion.isCancelled ? 'Экскурсия отменена' : 'Выбрать места',
-              padding: const EdgeInsets.all(8),
-              constraints: const BoxConstraints(),
-                  onPressed: (excursion.isCancelled || excursion.busSeats.isEmpty)
-                      ? null
-                      : () => _showSeatSheet(context, ref),
-                ),
-                IconButton(
-              icon: const Icon(Icons.event_seat, size: 20),
-                  tooltip: excursion.isCancelled ? 'Экскурсия отменена' : 'Схема рассадки',
-              padding: const EdgeInsets.all(8),
-              constraints: const BoxConstraints(),
-                  onPressed: (excursion.busSeats.isEmpty || excursion.isCancelled)
-                      ? null
-                      : () => _showSeatingChart(context, ref),
-                ),
-                IconButton(
-              icon: const Icon(Icons.person_add, size: 20),
-                  tooltip: excursion.isCancelled ? 'Экскурсия отменена' : 'Назначить персонал',
-              padding: const EdgeInsets.all(8),
-              constraints: const BoxConstraints(),
-                  onPressed: excursion.isCancelled
-                      ? null
-                      : () => _assignStaff(context, ref),
-            ),
+            ],
           ],
         ),
       ),

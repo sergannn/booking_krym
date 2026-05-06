@@ -50,16 +50,16 @@ class _SellerHomePageState extends ConsumerState<SellerHomePage> {
     Color? userColor;
     if (widget.user.color != null && widget.user.color!.isNotEmpty) {
       try {
-        userColor = Color(int.parse(widget.user.color!.replaceFirst('#', ''), radix: 16) + 0xFF000000);
+        userColor = Color(
+            int.parse(widget.user.color!.replaceFirst('#', ''), radix: 16) +
+                0xFF000000);
       } catch (e) {
         // Если не удалось распарсить цвет, используем null
       }
     }
 
     final appBarColor = userColor ??
-        (hasInternet
-            ? Theme.of(context).colorScheme.primary
-            : Colors.red);
+        (hasInternet ? Theme.of(context).colorScheme.primary : Colors.red);
 
     return Scaffold(
       appBar: AppBar(
@@ -67,7 +67,8 @@ class _SellerHomePageState extends ConsumerState<SellerHomePage> {
         foregroundColor: Colors.white, // Белый цвет для всех элементов AppBar
         title: Text(
           'Организатор экскурсии — ${widget.user.name}',
-          style: const TextStyle(color: Colors.white), // Явно указываем белый цвет
+          style:
+              const TextStyle(color: Colors.white), // Явно указываем белый цвет
         ),
         actions: [
           IconButton(
@@ -196,7 +197,8 @@ class _ExcursionsTabState extends ConsumerState<_ExcursionsTab>
         filteredPastItems.sort((a, b) => b.dateTime.compareTo(a.dateTime));
 
         // Функция для построения списка экскурсий
-        Widget buildExcursionList(List<Excursion> allItems, String emptyMessage, {bool isPast = false}) {
+        Widget buildExcursionList(List<Excursion> allItems, String emptyMessage,
+            {bool isPast = false}) {
           if (allItems.isEmpty) {
             return Center(
               child: Padding(
@@ -214,7 +216,8 @@ class _ExcursionsTabState extends ConsumerState<_ExcursionsTab>
           // Для прошедших экскурсий сортируем по убыванию (самые свежие первыми)
           // Для предстоящих - по возрастанию
           final sortedDates = groups.keys.toList()
-            ..sort(isPast ? (a, b) => b.compareTo(a) : (a, b) => a.compareTo(b));
+            ..sort(
+                isPast ? (a, b) => b.compareTo(a) : (a, b) => a.compareTo(b));
           return RefreshIndicator(
             onRefresh: () async {
               ref.invalidate(excursionsFutureProvider);
@@ -327,9 +330,7 @@ class _ExcursionDaySection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return _ExpandableCard(
-      color: index % 2 == 0 
-          ? Colors.grey.shade50 
-          : Colors.white,
+      color: index % 2 == 0 ? Colors.grey.shade50 : Colors.white,
       child: ExpansionTile(
         title: Text(
           date,
@@ -400,8 +401,8 @@ class _ExpandableCardState extends State<_ExpandableCard> {
       return Container(
         decoration: BoxDecoration(
           border: Border.all(
-            color: _isExpanded 
-                ? Theme.of(context).colorScheme.primary 
+            color: _isExpanded
+                ? Theme.of(context).colorScheme.primary
                 : Colors.transparent,
             width: _isExpanded ? 2 : 0,
           ),
@@ -418,8 +419,8 @@ class _ExpandableCardState extends State<_ExpandableCard> {
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
         side: BorderSide(
-          color: _isExpanded 
-              ? Theme.of(context).colorScheme.primary 
+          color: _isExpanded
+              ? Theme.of(context).colorScheme.primary
               : Colors.transparent,
           width: _isExpanded ? 2 : 0,
         ),
@@ -455,9 +456,7 @@ class _ExcursionTile extends ConsumerWidget {
       cardColor = Colors.amber.shade50; // Светло-желтый для внеплановых
     } else {
       // Чередующийся фон для четных/нечетных строк
-      cardColor = index % 2 == 0 
-          ? Colors.grey.shade100 
-          : Colors.white;
+      cardColor = index % 2 == 0 ? Colors.grey.shade100 : Colors.white;
     }
 
     return Card(
@@ -478,37 +477,36 @@ class _ExcursionTile extends ConsumerWidget {
                     style: Theme.of(context).textTheme.titleSmall?.copyWith(
                           fontSize: 14,
                           fontWeight: FontWeight.w600,
-                      ),
-                    ),
+                        ),
+                  ),
                   const SizedBox(height: 4),
-              //    Text(
-             //       'Цена (взрослый): ${excursion.priceFor('adult').toStringAsFixed(2)} ₽, Мест: ,
-             //       style: Theme.of(context).textTheme.bodySmall?.copyWith(
-            //              fontSize: 12,
-            //      ),
-            
+                  //    Text(
+                  //       'Цена (взрослый): ${excursion.priceFor('adult').toStringAsFixed(2)} ₽, Мест: ,
+                  //       style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  //              fontSize: 12,
+                  //      ),
                 ],
               ),
             ),
             const SizedBox(width: 4),
-                // IconButton(
-                //   icon: const Icon(Icons.event_seat, size: 20),
-                //       tooltip: 'Забронировать',
-                //   padding: const EdgeInsets.all(8),
-                //       constraints: const BoxConstraints(),
-                //       onPressed: isAvailable ? () => _book(context, ref) : null,
-                //       color: isAvailable
-                //           ? Theme.of(context).colorScheme.primary
-                //           : Colors.grey,
-                //     ),
-                IconButton(
+            // IconButton(
+            //   icon: const Icon(Icons.event_seat, size: 20),
+            //       tooltip: 'Забронировать',
+            //   padding: const EdgeInsets.all(8),
+            //       constraints: const BoxConstraints(),
+            //       onPressed: isAvailable ? () => _book(context, ref) : null,
+            //       color: isAvailable
+            //           ? Theme.of(context).colorScheme.primary
+            //           : Colors.grey,
+            //     ),
+            IconButton(
               icon: const Icon(Icons.list, size: 20),
-                  tooltip: 'Места',
+              tooltip: 'Места',
               padding: const EdgeInsets.all(8),
               constraints: const BoxConstraints(),
-                  onPressed: excursion.busSeats.isEmpty
-                      ? null
-                      : () => _showSeatSheet(context, ref),
+              onPressed: excursion.busSeats.isEmpty
+                  ? null
+                  : () => _showSeatSheet(context, ref),
             ),
           ],
         ),
@@ -522,7 +520,9 @@ class _ExcursionTile extends ConsumerWidget {
     List<int>? preselectedSeats,
   }) async {
     final messenger = ScaffoldMessenger.of(context);
-    final stopsAsync = await ref.read(stopsFutureProvider.future);
+    final stopsAsync = await ref
+        .read(stopsRepositoryProvider)
+        .fetchStopsForExcursion(excursion.id);
     final result = await showDialog<BookingDialogResult>(
       context: context,
       builder: (context) => BookingDialog(
@@ -544,7 +544,7 @@ class _ExcursionTile extends ConsumerWidget {
       final weekday = excursion.dateTime.weekday; // 1-7
       final time = DateFormat('HH:mm').format(excursion.dateTime);
       final excursionDate = DateFormat('yyyy-MM-dd').format(excursion.dateTime);
-      
+
       // Используем новый формат если доступен, иначе старый
       final payload = result.seats != null && result.seats!.isNotEmpty
           ? BookSeatPayload(
@@ -590,9 +590,10 @@ class _ExcursionTile extends ConsumerWidget {
         final bookingId = response.firstBookingId;
         if (bookingId != null) {
           // Получаем все ID бронирований из ответа
-          print('Booking response: bookings count = ${response.bookings?.length ?? 0}');
+          print(
+              'Booking response: bookings count = ${response.bookings?.length ?? 0}');
           print('Booking response: bookings = ${response.bookings}');
-          
+
           final allBookingIds = response.bookings
               ?.map((b) {
                 final id = b['id'];
@@ -601,19 +602,24 @@ class _ExcursionTile extends ConsumerWidget {
               })
               .whereType<int>()
               .toList();
-          
-          print('Extracted booking IDs: $allBookingIds (count: ${allBookingIds?.length ?? 0})');
-          
+
+          print(
+              'Extracted booking IDs: $allBookingIds (count: ${allBookingIds?.length ?? 0})');
+
           // Получаем информацию о первом бронировании для сохранения метаданных
           final firstBooking = response.bookings?.first;
           SavedTicket? ticketInfo;
-          if (firstBooking != null && allBookingIds != null && allBookingIds.isNotEmpty) {
+          if (firstBooking != null &&
+              allBookingIds != null &&
+              allBookingIds.isNotEmpty) {
             // Получаем данные остановки из локального списка
             final stopId = firstBooking['stop_id'] as int?;
             String stopName = 'Не указана';
             if (stopId != null) {
               try {
-                final stopsAsync = await ref.read(stopsFutureProvider.future);
+                final stopsAsync = await ref
+                    .read(stopsRepositoryProvider)
+                    .fetchStopsForExcursion(excursion.id);
                 if (stopsAsync.isNotEmpty) {
                   final stop = stopsAsync.firstWhere(
                     (s) => s.id == stopId,
@@ -625,21 +631,22 @@ class _ExcursionTile extends ConsumerWidget {
                 // Игнорируем ошибку, используем значение по умолчанию
               }
             }
-            
+
             // Получаем дату/время из первого бронирования
             final dateTimeStr = firstBooking['date_time'] as String?;
             String excursionDateStr;
             if (dateTimeStr != null && dateTimeStr.isNotEmpty) {
               try {
                 final dateTime = DateTime.parse(dateTimeStr);
-                excursionDateStr = DateFormat('dd.MM.yyyy HH:mm').format(dateTime);
+                excursionDateStr =
+                    DateFormat('dd.MM.yyyy HH:mm').format(dateTime);
               } catch (e) {
                 excursionDateStr = formatter.format(excursion.dateTime);
               }
             } else {
               excursionDateStr = formatter.format(excursion.dateTime);
             }
-            
+
             // Получаем имя и телефон клиента
             // В новом формате используем данные из первого места из seats
             // В старом формате используем result.customerName/customerPhone
@@ -647,14 +654,16 @@ class _ExcursionTile extends ConsumerWidget {
             String customerPhone;
             if (result.seats != null && result.seats!.isNotEmpty) {
               // Новый формат: берем данные из первого места
-              customerName = result.seats!.first.customerName ?? result.customerName;
-              customerPhone = result.seats!.first.customerPhone ?? result.customerPhone;
+              customerName =
+                  result.seats!.first.customerName ?? result.customerName;
+              customerPhone =
+                  result.seats!.first.customerPhone ?? result.customerPhone;
             } else {
               // Старый формат: используем общие данные
               customerName = result.customerName;
               customerPhone = result.customerPhone;
             }
-            
+
             // Подсчитываем количество мест и общую сумму из всех бронирований
             final seatCount = allBookingIds.length;
             double totalAmount = 0.0;
@@ -670,50 +679,55 @@ class _ExcursionTile extends ConsumerWidget {
                 }
               }
             }
-            
+
             // Если сумма равна 0, пытаемся получить из тарифов
-            if (totalAmount <= 0 && result.seats != null && result.seats!.isNotEmpty) {
+            if (totalAmount <= 0 &&
+                result.seats != null &&
+                result.seats!.isNotEmpty) {
               for (var seat in result.seats!) {
                 final tariff = excursion.tariffs[seat.passengerType.apiValue];
                 if (tariff != null) {
                   if (seat.withEntry) {
                     totalAmount += tariff.priceWithEntry ?? tariff.price ?? 0.0;
                   } else {
-                    totalAmount += tariff.priceWithoutEntry ?? tariff.price ?? 0.0;
+                    totalAmount +=
+                        tariff.priceWithoutEntry ?? tariff.price ?? 0.0;
                   }
                 }
               }
             }
-            
+
             ticketInfo = SavedTicket(
               bookingId: bookingId,
-              ticketNumber: 'T-${excursion.id}-$bookingId-${DateTime.now().millisecondsSinceEpoch}',
+              ticketNumber:
+                  'T-${excursion.id}-$bookingId-${DateTime.now().millisecondsSinceEpoch}',
               excursionTitle: excursion.title,
               excursionDate: excursionDateStr,
               stopName: stopName,
               customerName: customerName,
               customerPhone: customerPhone,
-              fileName: 'ticket-$bookingId-${DateTime.now().millisecondsSinceEpoch}.pdf',
+              fileName:
+                  'ticket-$bookingId-${DateTime.now().millisecondsSinceEpoch}.pdf',
               savedAt: DateTime.now(),
               seatCount: seatCount,
               totalAmount: totalAmount,
             );
           }
-          
+
           // Скачиваем PDF как байты, передавая все ID бронирований
           // Убеждаемся, что allBookingIds не null и не пустой
-          final idsToSend = (allBookingIds != null && allBookingIds.isNotEmpty) 
-              ? allBookingIds 
+          final idsToSend = (allBookingIds != null && allBookingIds.isNotEmpty)
+              ? allBookingIds
               : [bookingId];
-          
-          print('PDF download: sending bookingIds = $idsToSend (count: ${idsToSend.length})');
-          
-          final pdfBytes = await ref
-              .read(bookingsRepositoryProvider)
-              .downloadTicketPdf(
-                bookingId,
-                bookingIds: idsToSend,
-              );
+
+          print(
+              'PDF download: sending bookingIds = $idsToSend (count: ${idsToSend.length})');
+
+          final pdfBytes =
+              await ref.read(bookingsRepositoryProvider).downloadTicketPdf(
+                    bookingId,
+                    bookingIds: idsToSend,
+                  );
           // Сохраняем/отправляем PDF (на мобильных) или скачиваем (на веб)
           await PdfDownloader.saveAndSharePdf(
             pdfBytes: pdfBytes,
@@ -743,7 +757,7 @@ class _ExcursionTile extends ConsumerWidget {
 
   Future<void> _showSeatSheet(BuildContext context, WidgetRef ref) async {
     final selectedSeats = <int>{};
-    
+
     // Загружаем разрешения для этой экскурсии и даты
     Map<String, bool>? permissions;
     final isAdmin = user.roleId == 1 || user.isSuperUser;
@@ -752,7 +766,8 @@ class _ExcursionTile extends ConsumerWidget {
         final client = ref.read(apiClientProvider);
         final permissionRepo = SeatPermissionRepository(client);
         // Используем дату из excursion.dateTime (для шаблонных экскурсий это дата из schedule_by_date)
-        final excursionDate = DateFormat('yyyy-MM-dd').format(excursion.dateTime);
+        final excursionDate =
+            DateFormat('yyyy-MM-dd').format(excursion.dateTime);
         print('=== PERMISSION CHECK ===');
         print('Excursion ID: ${excursion.id}');
         print('Excursion Title: ${excursion.title}');
@@ -764,13 +779,18 @@ class _ExcursionTile extends ConsumerWidget {
           excursionDate: excursionDate,
         );
         print('API Response: ${permissions.toString()}');
-        print('has_permission_for_seat_1: ${permissions['has_permission_for_seat_1']}');
-        print('has_permission_for_seat_2: ${permissions['has_permission_for_seat_2']}');
+        print(
+            'has_permission_for_seat_1: ${permissions['has_permission_for_seat_1']}');
+        print(
+            'has_permission_for_seat_2: ${permissions['has_permission_for_seat_2']}');
         print('=======================');
       } catch (e) {
         // Если не удалось загрузить разрешения, считаем что их нет
         print('Error loading permissions: $e');
-        permissions = {'has_permission_for_seat_1': false, 'has_permission_for_seat_2': false};
+        permissions = {
+          'has_permission_for_seat_1': false,
+          'has_permission_for_seat_2': false
+        };
       }
     }
 
@@ -792,23 +812,29 @@ class _ExcursionTile extends ConsumerWidget {
                   // Места 1 и 2 могут продавать только администраторы или пользователи с разрешением
                   final isRestrictedSeat = [1, 2].contains(seat.seatNumber);
                   // Проверяем разрешение: для админа всегда true, для продавца проверяем permissions
-                  final hasPermission = isAdmin || 
-                      (isRestrictedSeat && permissions != null && 
-                       ((seat.seatNumber == 1 && (permissions['has_permission_for_seat_1'] == true)) ||
-                        (seat.seatNumber == 2 && (permissions['has_permission_for_seat_2'] == true))));
+                  final hasPermission = isAdmin ||
+                      (isRestrictedSeat &&
+                          permissions != null &&
+                          ((seat.seatNumber == 1 &&
+                                  (permissions['has_permission_for_seat_1'] ==
+                                      true)) ||
+                              (seat.seatNumber == 2 &&
+                                  (permissions['has_permission_for_seat_2'] ==
+                                      true))));
                   final canSelect =
                       isAvailable && (!isRestrictedSeat || hasPermission);
-                  
+
                   // Отладочный вывод для мест 1 и 2
                   if (isRestrictedSeat) {
-                    print('Seat ${seat.seatNumber}: isAvailable=$isAvailable, isAdmin=$isAdmin, hasPermission=$hasPermission, canSelect=$canSelect');
+                    print(
+                        'Seat ${seat.seatNumber}: isAvailable=$isAvailable, isAdmin=$isAdmin, hasPermission=$hasPermission, canSelect=$canSelect');
                     if (permissions != null) {
                       print('  Permissions: ${permissions.toString()}');
                     } else {
                       print('  Permissions: null');
                     }
                   }
-                  
+
                   final color = isSelected
                       ? Colors.blue.shade300
                       : canSelect
@@ -833,7 +859,8 @@ class _ExcursionTile extends ConsumerWidget {
                                 // Показываем диалог запроса доступа
                                 final requestResult = await showDialog<bool>(
                                   context: context,
-                                  builder: (dialogContext) => SeatAccessRequestDialog(
+                                  builder: (dialogContext) =>
+                                      SeatAccessRequestDialog(
                                     excursion: excursion,
                                     excursionDate: excursion.dateTime,
                                     seatNumber: seat.seatNumber,
@@ -1071,19 +1098,20 @@ class _BookingsTabState extends ConsumerState<_BookingsTab>
                       '${timeFormatter.format(group.excursion.dateTime)} • ${group.bookings.length} место${group.bookings.length > 1 ? 'а' : ''}${group.excursion.maxSeats != null ? ' из ${group.excursion.maxSeats}' : ''}',
                     ),
                     children: group.bookings
-                      .map(
-                        (booking) => ListTile(
-                          title: Text('Место ${booking.seat.seatNumber}'),
-                          subtitle: Text(
-                              'Бронировано: ${subFormatter.format(booking.bookedAt)}'),
-                          trailing: IconButton(
-                            icon: const Icon(Icons.cancel),
-                            tooltip: 'Отменить',
-                            onPressed: () => _cancel(context, ref, booking.id),
+                        .map(
+                          (booking) => ListTile(
+                            title: Text('Место ${booking.seat.seatNumber}'),
+                            subtitle: Text(
+                                'Бронировано: ${subFormatter.format(booking.bookedAt)}'),
+                            trailing: IconButton(
+                              icon: const Icon(Icons.cancel),
+                              tooltip: 'Отменить',
+                              onPressed: () =>
+                                  _cancel(context, ref, booking.id),
+                            ),
                           ),
-                        ),
-                      )
-                      .toList(),
+                        )
+                        .toList(),
                   ),
                 );
               }).toList(),
@@ -1261,20 +1289,24 @@ class _SellerWalletTabState extends ConsumerState<_SellerWalletTab> {
                         onPressed: () async {
                           final now = DateTime.now();
                           final firstDate = DateTime(now.year - 1, 1, 1);
-                          final lastDate = _selectedDateTo ?? DateTime(now.year, now.month, now.day);
-                          
+                          final lastDate = _selectedDateTo ??
+                              DateTime(now.year, now.month, now.day);
+
                           final picked = await showDatePicker(
                             context: context,
                             firstDate: firstDate,
                             lastDate: lastDate,
-                            initialDate: _selectedDateFrom ?? DateTime(now.year, now.month, now.day),
+                            initialDate: _selectedDateFrom ??
+                                DateTime(now.year, now.month, now.day),
                           );
-                          
+
                           if (picked != null && mounted) {
                             setState(() {
                               _selectedDateFrom = picked;
                               // Если дата "от" больше даты "до", сбрасываем "до"
-                              if (_selectedDateTo != null && _selectedDateFrom!.isAfter(_selectedDateTo!)) {
+                              if (_selectedDateTo != null &&
+                                  _selectedDateFrom!
+                                      .isAfter(_selectedDateTo!)) {
                                 _selectedDateTo = null;
                               }
                             });
@@ -1283,28 +1315,35 @@ class _SellerWalletTabState extends ConsumerState<_SellerWalletTab> {
                         child: Text(
                           _selectedDateFrom == null
                               ? 'ОТ'
-                              : DateFormat('dd.MM.yyyy', 'ru_RU').format(_selectedDateFrom!),
+                              : DateFormat('dd.MM.yyyy', 'ru_RU')
+                                  .format(_selectedDateFrom!),
                         ),
                       ),
                       const SizedBox(width: 8),
                       OutlinedButton(
                         onPressed: () async {
                           final now = DateTime.now();
-                          final firstDate = _selectedDateFrom ?? DateTime(now.year - 1, 1, 1);
-                          final lastDate = DateTime(now.year, now.month, now.day);
-                          
+                          final firstDate =
+                              _selectedDateFrom ?? DateTime(now.year - 1, 1, 1);
+                          final lastDate =
+                              DateTime(now.year, now.month, now.day);
+
                           final picked = await showDatePicker(
                             context: context,
                             firstDate: firstDate,
                             lastDate: lastDate,
-                            initialDate: _selectedDateTo ?? (_selectedDateFrom ?? DateTime(now.year, now.month, now.day)),
+                            initialDate: _selectedDateTo ??
+                                (_selectedDateFrom ??
+                                    DateTime(now.year, now.month, now.day)),
                           );
-                          
+
                           if (picked != null && mounted) {
                             setState(() {
                               _selectedDateTo = picked;
                               // Если дата "до" меньше даты "от", сбрасываем "от"
-                              if (_selectedDateFrom != null && _selectedDateTo!.isBefore(_selectedDateFrom!)) {
+                              if (_selectedDateFrom != null &&
+                                  _selectedDateTo!
+                                      .isBefore(_selectedDateFrom!)) {
                                 _selectedDateFrom = null;
                               }
                             });
@@ -1313,7 +1352,8 @@ class _SellerWalletTabState extends ConsumerState<_SellerWalletTab> {
                         child: Text(
                           _selectedDateTo == null
                               ? 'ДО'
-                              : DateFormat('dd.MM.yyyy', 'ru_RU').format(_selectedDateTo!),
+                              : DateFormat('dd.MM.yyyy', 'ru_RU')
+                                  .format(_selectedDateTo!),
                         ),
                       ),
                     ],
@@ -1328,7 +1368,7 @@ class _SellerWalletTabState extends ConsumerState<_SellerWalletTab> {
                   if (_selectedDateFrom != null || _selectedDateTo != null) {
                     DateTime? startDate;
                     DateTime? endDate;
-                    
+
                     if (_selectedDateFrom != null) {
                       startDate = DateTime(
                         _selectedDateFrom!.year,
@@ -1336,7 +1376,7 @@ class _SellerWalletTabState extends ConsumerState<_SellerWalletTab> {
                         _selectedDateFrom!.day,
                       );
                     }
-                    
+
                     if (_selectedDateTo != null) {
                       endDate = DateTime(
                         _selectedDateTo!.year,
@@ -1347,20 +1387,25 @@ class _SellerWalletTabState extends ConsumerState<_SellerWalletTab> {
                         59,
                       );
                     }
-                    
+
                     filteredTransactions = wallet.transactions.where((t) {
                       // Используем дату экскурсии для фильтрации, если есть бронирование
                       DateTime transactionDate;
-                      if (t.booking != null && t.booking!.excursion.dateTime != null) {
+                      if (t.booking != null &&
+                          t.booking!.excursion.dateTime != null) {
                         transactionDate = t.booking!.excursion.dateTime;
                       } else {
                         transactionDate = t.createdAt;
                       }
-                      
-                      if (startDate != null && transactionDate.isBefore(startDate.subtract(const Duration(seconds: 1)))) {
+
+                      if (startDate != null &&
+                          transactionDate.isBefore(
+                              startDate.subtract(const Duration(seconds: 1)))) {
                         return false;
                       }
-                      if (endDate != null && transactionDate.isAfter(endDate.add(const Duration(seconds: 1)))) {
+                      if (endDate != null &&
+                          transactionDate.isAfter(
+                              endDate.add(const Duration(seconds: 1)))) {
                         return false;
                       }
                       return true;
@@ -1375,22 +1420,26 @@ class _SellerWalletTabState extends ConsumerState<_SellerWalletTab> {
                   }
 
                   // Группируем транзакции по дате экскурсии (а не по дате продажи)
-                  final groupedTransactions = <DateTime, List<WalletTransactionItem>>{};
+                  final groupedTransactions =
+                      <DateTime, List<WalletTransactionItem>>{};
                   for (final transaction in filteredTransactions) {
                     // Используем дату экскурсии, если есть бронирование, иначе дату создания транзакции
                     DateTime transactionDate;
-                    if (transaction.booking != null && transaction.booking!.excursion.dateTime != null) {
+                    if (transaction.booking != null &&
+                        transaction.booking!.excursion.dateTime != null) {
                       transactionDate = transaction.booking!.excursion.dateTime;
                     } else {
                       transactionDate = transaction.createdAt;
                     }
-                    
+
                     final date = DateTime(
                       transactionDate.year,
                       transactionDate.month,
                       transactionDate.day,
                     );
-                    groupedTransactions.putIfAbsent(date, () => []).add(transaction);
+                    groupedTransactions
+                        .putIfAbsent(date, () => [])
+                        .add(transaction);
                   }
 
                   // Сортируем даты по убыванию (новые первыми)
@@ -1405,16 +1454,18 @@ class _SellerWalletTabState extends ConsumerState<_SellerWalletTab> {
                       final transactions = groupedTransactions[date]!;
                       // Сортируем транзакции внутри дня по дате экскурсии (новые первыми)
                       transactions.sort((a, b) {
-                        DateTime dateA = a.booking?.excursion.dateTime ?? a.createdAt;
-                        DateTime dateB = b.booking?.excursion.dateTime ?? b.createdAt;
+                        DateTime dateA =
+                            a.booking?.excursion.dateTime ?? a.createdAt;
+                        DateTime dateB =
+                            b.booking?.excursion.dateTime ?? b.createdAt;
                         return dateB.compareTo(dateA);
                       });
                       final isExpanded = _expandedDates.contains(date);
-                      
+
                       return _ExpandableCard(
                         margin: const EdgeInsets.only(bottom: 8),
-                        color: dateIndex % 2 == 0 
-                            ? Colors.grey.shade50 
+                        color: dateIndex % 2 == 0
+                            ? Colors.grey.shade50
                             : Colors.white,
                         child: ExpansionTile(
                           initiallyExpanded: isExpanded,
@@ -1434,87 +1485,95 @@ class _SellerWalletTabState extends ConsumerState<_SellerWalletTab> {
                                 .titleSmall
                                 ?.copyWith(
                                   fontWeight: FontWeight.bold,
-                                  color: Theme.of(context)
-                                      .colorScheme
-                                      .primary,
+                                  color: Theme.of(context).colorScheme.primary,
                                 ),
                           ),
                           children: transactions.asMap().entries.map(
-                          (entry) {
-                            final transaction = entry.value;
-                            final index = entry.key;
-                            return Container(
-                              margin: const EdgeInsets.only(bottom: 4),
-                              color: index % 2 == 0 
-                                  ? Colors.grey.shade100 
-                                  : Colors.white,
-                              child: ExpansionTile(
-                              leading: CircleAvatar(
-                                backgroundColor: transaction.amount >= 0
-                                    ? Colors.green.shade100
-                                    : Colors.red.shade100,
-                                child: Icon(
-                                  transaction.amount >= 0
-                                      ? Icons.arrow_downward
-                                      : Icons.arrow_upward,
-                                  color: transaction.amount >= 0
-                                      ? Colors.green
-                                      : Colors.red,
-                                ),
-                              ),
-                              title: Text(
-                                transaction.cleanedDescription,
-                                style: Theme.of(context).textTheme.bodyMedium,
-                              ),
-                              subtitle: Text(
-                                DateFormat('dd.MM.yyyy HH:mm').format(transaction.createdAt),
-                                style: Theme.of(context).textTheme.bodySmall,
-                              ),
-                              trailing: Text(
-                                '${transaction.amount.toStringAsFixed(2)} ₽',
-                                style: TextStyle(
-                                  color: transaction.amount >= 0
-                                      ? Colors.green
-                                      : Colors.red,
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 16,
-                                ),
-                              ),
-                              children: transaction.booking != null ? [
-                                ListTile(
+                            (entry) {
+                              final transaction = entry.value;
+                              final index = entry.key;
+                              return Container(
+                                margin: const EdgeInsets.only(bottom: 4),
+                                color: index % 2 == 0
+                                    ? Colors.grey.shade100
+                                    : Colors.white,
+                                child: ExpansionTile(
+                                  leading: CircleAvatar(
+                                    backgroundColor: transaction.amount >= 0
+                                        ? Colors.green.shade100
+                                        : Colors.red.shade100,
+                                    child: Icon(
+                                      transaction.amount >= 0
+                                          ? Icons.arrow_downward
+                                          : Icons.arrow_upward,
+                                      color: transaction.amount >= 0
+                                          ? Colors.green
+                                          : Colors.red,
+                                    ),
+                                  ),
                                   title: Text(
-                                    'Бронирование',
-                                    style: Theme.of(context).textTheme.titleSmall,
+                                    transaction.cleanedDescription,
+                                    style:
+                                        Theme.of(context).textTheme.bodyMedium,
                                   ),
-                                  subtitle: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      const SizedBox(height: 8),
-                                      Text(
-                                        'Экскурсия: ${transaction.booking!.excursion.title}',
-                                      ),
-                                      if (transaction.booking!.excursion.dateTime != null) ...[
-                                        const SizedBox(height: 4),
-                                        Text(
-                                          'Дата: ${formatter.format(transaction.booking!.excursion.dateTime)}',
-                                        ),
-                                      ],
-                                      const SizedBox(height: 4),
-                                      Text(
-                                        'Клиент: ${transaction.booking!.customerName}',
-                                      ),
-                                      const SizedBox(height: 4),
-                                      Text(
-                                        'Сумма бронирования: ${transaction.booking!.price.toStringAsFixed(2)} ₽',
-                                      ),
-                                    ],
+                                  subtitle: Text(
+                                    DateFormat('dd.MM.yyyy HH:mm')
+                                        .format(transaction.createdAt),
+                                    style:
+                                        Theme.of(context).textTheme.bodySmall,
                                   ),
+                                  trailing: Text(
+                                    '${transaction.amount.toStringAsFixed(2)} ₽',
+                                    style: TextStyle(
+                                      color: transaction.amount >= 0
+                                          ? Colors.green
+                                          : Colors.red,
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 16,
+                                    ),
+                                  ),
+                                  children: transaction.booking != null
+                                      ? [
+                                          ListTile(
+                                            title: Text(
+                                              'Бронирование',
+                                              style: Theme.of(context)
+                                                  .textTheme
+                                                  .titleSmall,
+                                            ),
+                                            subtitle: Column(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
+                                              children: [
+                                                const SizedBox(height: 8),
+                                                Text(
+                                                  'Экскурсия: ${transaction.booking!.excursion.title}',
+                                                ),
+                                                if (transaction.booking!
+                                                        .excursion.dateTime !=
+                                                    null) ...[
+                                                  const SizedBox(height: 4),
+                                                  Text(
+                                                    'Дата: ${formatter.format(transaction.booking!.excursion.dateTime)}',
+                                                  ),
+                                                ],
+                                                const SizedBox(height: 4),
+                                                Text(
+                                                  'Клиент: ${transaction.booking!.customerName}',
+                                                ),
+                                                const SizedBox(height: 4),
+                                                Text(
+                                                  'Сумма бронирования: ${transaction.booking!.price.toStringAsFixed(2)} ₽',
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ]
+                                      : [],
                                 ),
-                              ] : [],
-                              ),
-                            );
-                          },
-                        ).toList(),
+                              );
+                            },
+                          ).toList(),
                         ),
                       );
                     }).toList(),
@@ -1561,7 +1620,7 @@ class _SellerWalletTabState extends ConsumerState<_SellerWalletTab> {
                     if (_selectedDateFrom != null || _selectedDateTo != null) {
                       DateTime? startDate;
                       DateTime? endDate;
-                      
+
                       if (_selectedDateFrom != null) {
                         startDate = DateTime(
                           _selectedDateFrom!.year,
@@ -1569,7 +1628,7 @@ class _SellerWalletTabState extends ConsumerState<_SellerWalletTab> {
                           _selectedDateFrom!.day,
                         );
                       }
-                      
+
                       if (_selectedDateTo != null) {
                         endDate = DateTime(
                           _selectedDateTo!.year,
@@ -1580,18 +1639,22 @@ class _SellerWalletTabState extends ConsumerState<_SellerWalletTab> {
                           59,
                         );
                       }
-                      
+
                       filteredBookings = sales.bookings.where((b) {
-                        if (startDate != null && b.bookedAt.isBefore(startDate.subtract(const Duration(seconds: 1)))) {
+                        if (startDate != null &&
+                            b.bookedAt.isBefore(startDate
+                                .subtract(const Duration(seconds: 1)))) {
                           return false;
                         }
-                        if (endDate != null && b.bookedAt.isAfter(endDate.add(const Duration(seconds: 1)))) {
+                        if (endDate != null &&
+                            b.bookedAt.isAfter(
+                                endDate.add(const Duration(seconds: 1)))) {
                           return false;
                         }
                         return true;
                       }).toList();
                     }
-                    
+
                     if (filteredBookings.isEmpty) {
                       return Padding(
                         padding: const EdgeInsets.all(16),
@@ -1602,15 +1665,16 @@ class _SellerWalletTabState extends ConsumerState<_SellerWalletTab> {
                         ),
                       );
                     }
-                    
+
                     // Пересчитываем общую сумму продаж
-                    final totalSales = filteredBookings
-                        .fold<double>(0, (sum, booking) => sum + booking.price);
-                    
+                    final totalSales = filteredBookings.fold<double>(
+                        0, (sum, booking) => sum + booking.price);
+
                     return Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        if (_selectedDateFrom != null || _selectedDateTo != null)
+                        if (_selectedDateFrom != null ||
+                            _selectedDateTo != null)
                           Card(
                             child: ListTile(
                               title: const Text('Общая сумма продаж'),
@@ -1629,14 +1693,19 @@ class _SellerWalletTabState extends ConsumerState<_SellerWalletTab> {
                                 margin: const EdgeInsets.only(bottom: 8),
                                 child: ExpansionTile(
                                   title: Text(
-                                    formatter.format(booking.excursion.dateTime),
-                                    style: Theme.of(context).textTheme.titleMedium,
+                                    formatter
+                                        .format(booking.excursion.dateTime),
+                                    style:
+                                        Theme.of(context).textTheme.titleMedium,
                                   ),
                                   subtitle: Text(
                                     'Продажа: ${formatter.format(booking.bookedAt)}',
-                                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                      color: Colors.grey,
-                                    ),
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .bodySmall
+                                        ?.copyWith(
+                                          color: Colors.grey,
+                                        ),
                                   ),
                                   trailing: Text(
                                     '${booking.price.toStringAsFixed(2)} ₽',
@@ -1649,17 +1718,22 @@ class _SellerWalletTabState extends ConsumerState<_SellerWalletTab> {
                                     ListTile(
                                       title: Text(booking.excursion.title),
                                       subtitle: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
                                         children: [
                                           const SizedBox(height: 8),
                                           Text(
                                             'Дата экскурсии: ${formatter.format(booking.excursion.dateTime)}',
-                                            style: Theme.of(context).textTheme.bodyMedium,
+                                            style: Theme.of(context)
+                                                .textTheme
+                                                .bodyMedium,
                                           ),
                                           const SizedBox(height: 4),
                                           Text(
                                             'Дата продажи: ${formatter.format(booking.bookedAt)}',
-                                            style: Theme.of(context).textTheme.bodyMedium,
+                                            style: Theme.of(context)
+                                                .textTheme
+                                                .bodyMedium,
                                           ),
                                           const SizedBox(height: 4),
                                           Text(
@@ -1702,7 +1776,7 @@ class _SellerWalletTabState extends ConsumerState<_SellerWalletTab> {
                     if (_selectedDateFrom != null || _selectedDateTo != null) {
                       DateTime? startDate;
                       DateTime? endDate;
-                      
+
                       if (_selectedDateFrom != null) {
                         startDate = DateTime(
                           _selectedDateFrom!.year,
@@ -1710,7 +1784,7 @@ class _SellerWalletTabState extends ConsumerState<_SellerWalletTab> {
                           _selectedDateFrom!.day,
                         );
                       }
-                      
+
                       if (_selectedDateTo != null) {
                         endDate = DateTime(
                           _selectedDateTo!.year,
@@ -1721,18 +1795,22 @@ class _SellerWalletTabState extends ConsumerState<_SellerWalletTab> {
                           59,
                         );
                       }
-                      
+
                       filteredBreakdown = profit.breakdown.where((item) {
-                        if (startDate != null && item.bookedAt.isBefore(startDate.subtract(const Duration(seconds: 1)))) {
+                        if (startDate != null &&
+                            item.bookedAt.isBefore(startDate
+                                .subtract(const Duration(seconds: 1)))) {
                           return false;
                         }
-                        if (endDate != null && item.bookedAt.isAfter(endDate.add(const Duration(seconds: 1)))) {
+                        if (endDate != null &&
+                            item.bookedAt.isAfter(
+                                endDate.add(const Duration(seconds: 1)))) {
                           return false;
                         }
                         return true;
                       }).toList();
                     }
-                    
+
                     if (filteredBreakdown.isEmpty) {
                       return Padding(
                         padding: const EdgeInsets.all(16),
@@ -1745,12 +1823,14 @@ class _SellerWalletTabState extends ConsumerState<_SellerWalletTab> {
                     }
 
                     // Пересчитываем суммы для отфильтрованных данных
-                    final filteredTotalsByType = <String, ({double sales, double commission})>{};
+                    final filteredTotalsByType =
+                        <String, ({double sales, double commission})>{};
                     double filteredTotalProfit = 0;
-                    
+
                     for (final item in filteredBreakdown) {
                       final typeKey = item.passengerType.label;
-                      final current = filteredTotalsByType[typeKey] ?? (sales: 0, commission: 0);
+                      final current = filteredTotalsByType[typeKey] ??
+                          (sales: 0, commission: 0);
                       filteredTotalsByType[typeKey] = (
                         sales: current.sales + item.price,
                         commission: current.commission + item.commissionAmount,
@@ -1779,7 +1859,8 @@ class _SellerWalletTabState extends ConsumerState<_SellerWalletTab> {
                         Card(
                           child: ListTile(
                             title: Text(
-                              (_selectedDateFrom == null && _selectedDateTo == null)
+                              (_selectedDateFrom == null &&
+                                      _selectedDateTo == null)
                                   ? 'Общая прибыль'
                                   : 'Прибыль за период',
                             ),
@@ -1854,7 +1935,7 @@ class _SellerWalletTabState extends ConsumerState<_SellerWalletTab> {
                     );
                   },
                 ),
-              ],/*
+              ], /*
               const SizedBox(height: 24),
               Text(
                 'Активные бронирования',
@@ -2107,11 +2188,11 @@ class _ScheduleTab extends ConsumerWidget {
                       final unscheduledExcursions = excursions
                           .where((e) => e.isUnscheduled && !e.isDeleted)
                           .toList();
-                      
+
                       if (unscheduledExcursions.isEmpty) {
                         return const SizedBox.shrink();
                       }
-                      
+
                       // Разделяем на прошедшие и будущие
                       final pastExcursions = unscheduledExcursions
                           .where((e) => e.dateTime.isBefore(now))
@@ -2119,16 +2200,17 @@ class _ScheduleTab extends ConsumerWidget {
                       final futureExcursions = unscheduledExcursions
                           .where((e) => !e.dateTime.isBefore(now))
                           .toList();
-                      
+
                       // Группируем по экскурсиям (для будущих)
                       final groupedByTitleFuture = <String, List<Excursion>>{};
                       for (final excursion in futureExcursions) {
-                        if (!groupedByTitleFuture.containsKey(excursion.title)) {
+                        if (!groupedByTitleFuture
+                            .containsKey(excursion.title)) {
                           groupedByTitleFuture[excursion.title] = [];
                         }
                         groupedByTitleFuture[excursion.title]!.add(excursion);
                       }
-                      
+
                       // Группируем по экскурсиям (для прошедших)
                       final groupedByTitlePast = <String, List<Excursion>>{};
                       for (final excursion in pastExcursions) {
@@ -2137,38 +2219,45 @@ class _ScheduleTab extends ConsumerWidget {
                         }
                         groupedByTitlePast[excursion.title]!.add(excursion);
                       }
-                      
+
                       return Card(
                         margin: const EdgeInsets.fromLTRB(0, 0, 0, 16),
                         color: Colors.amber.shade50,
                         child: ExpansionTile(
-                          leading: const Icon(Icons.event_busy, color: Colors.amber),
+                          leading:
+                              const Icon(Icons.event_busy, color: Colors.amber),
                           title: const Text(
                             'Внеплановые',
                             style: TextStyle(fontWeight: FontWeight.bold),
                           ),
-                          subtitle: Text('${futureExcursions.length} ${futureExcursions.length == 1 ? 'экскурсия' : futureExcursions.length < 5 ? 'экскурсии' : 'экскурсий'}${pastExcursions.isNotEmpty ? ' (${pastExcursions.length} прошедших)' : ''}'),
+                          subtitle: Text(
+                              '${futureExcursions.length} ${futureExcursions.length == 1 ? 'экскурсия' : futureExcursions.length < 5 ? 'экскурсии' : 'экскурсий'}${pastExcursions.isNotEmpty ? ' (${pastExcursions.length} прошедших)' : ''}'),
                           children: [
                             // Будущие экскурсии
                             if (groupedByTitleFuture.isNotEmpty) ...[
                               const Padding(
-                                padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                padding: EdgeInsets.symmetric(
+                                    horizontal: 16, vertical: 8),
                                 child: Text(
                                   'Будущие',
-                                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                                  style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 16),
                                 ),
                               ),
                               ...groupedByTitleFuture.entries.map((entry) {
                                 final title = entry.key;
                                 final dates = entry.value;
-                                dates.sort((a, b) => a.dateTime.compareTo(b.dateTime));
-                                
+                                dates.sort(
+                                    (a, b) => a.dateTime.compareTo(b.dateTime));
+
                                 return ExpansionTile(
                                   title: Text(title),
                                   children: dates.map((excursion) {
                                     return ListTile(
                                       title: Text(
-                                        DateFormat('dd.MM.yyyy HH:mm').format(excursion.dateTime),
+                                        DateFormat('dd.MM.yyyy HH:mm')
+                                            .format(excursion.dateTime),
                                       ),
                                       subtitle: Text(
                                         'Мест: ${excursion.availableSeatsCount}/${excursion.maxSeats}',
@@ -2181,23 +2270,28 @@ class _ScheduleTab extends ConsumerWidget {
                             // Прошедшие экскурсии
                             if (groupedByTitlePast.isNotEmpty) ...[
                               const Padding(
-                                padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                padding: EdgeInsets.symmetric(
+                                    horizontal: 16, vertical: 8),
                                 child: Text(
                                   'Прошедшие',
-                                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                                  style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 16),
                                 ),
                               ),
                               ...groupedByTitlePast.entries.map((entry) {
                                 final title = entry.key;
                                 final dates = entry.value;
-                                dates.sort((a, b) => b.dateTime.compareTo(a.dateTime)); // Сортируем по убыванию
-                                
+                                dates.sort((a, b) => b.dateTime.compareTo(
+                                    a.dateTime)); // Сортируем по убыванию
+
                                 return ExpansionTile(
                                   title: Text(title),
                                   children: dates.map((excursion) {
                                     return ListTile(
                                       title: Text(
-                                        DateFormat('dd.MM.yyyy HH:mm').format(excursion.dateTime),
+                                        DateFormat('dd.MM.yyyy HH:mm')
+                                            .format(excursion.dateTime),
                                       ),
                                       subtitle: Text(
                                         'Мест: ${excursion.availableSeatsCount}/${excursion.maxSeats}',

@@ -7,6 +7,7 @@ class Excursion {
     required this.id,
     required this.title,
     required this.description,
+    this.direction = 'west',
     required this.date,
     required this.time,
     required this.dateTime,
@@ -28,6 +29,7 @@ class Excursion {
   final int id;
   final String title;
   final String description;
+  final String direction;
   final DateTime date;
   final String time;
   final DateTime dateTime;
@@ -52,7 +54,7 @@ class Excursion {
     final staffJson = json['assigned_staff'] as List<dynamic>?;
     final busAssignmentsJson = json['bus_assignments'] as List<dynamic>?;
     final pricesJson = json['prices'] as List<dynamic>?;
-    
+
     // date_time теперь может быть null (экскурсии стали шаблонами)
     final dateTimeStr = json['date_time'] as String?;
     DateTime? dateTime;
@@ -74,11 +76,12 @@ class Excursion {
       dateTime = DateTime.now();
       date = DateTime.now();
     }
-    
+
     return Excursion(
       id: (json['id'] as num?)?.toInt() ?? 0,
       title: json['title'] as String? ?? '',
       description: json['description'] as String? ?? '',
+      direction: json['direction'] as String? ?? 'west',
       date: date,
       time: json['time'] as String? ?? '',
       dateTime: dateTime,

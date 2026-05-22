@@ -58,8 +58,8 @@ class _StaffHomePageState extends ConsumerState<StaffHomePage> {
         normalizedRole.contains('экскурсовод');
     final showTabs = isDriver || isGuide;
     final excursionsAsync = ref.watch(
-      showTabs 
-          ? staffExcursionsFutureProvider(widget.user.id) 
+      showTabs
+          ? staffExcursionsFutureProvider(widget.user.id)
           : excursionsFutureProvider,
     );
     final staffProfitAsync =
@@ -81,11 +81,10 @@ class _StaffHomePageState extends ConsumerState<StaffHomePage> {
     // Отслеживаем статус интернета
     final internetStatusAsync = ref.watch(internetStatusProvider);
     final hasInternet = internetStatusAsync.valueOrNull ?? true;
-    
+
     // Определяем цвет фона AppBar в зависимости от статуса интернета
-    final appBarColor = hasInternet 
-        ? Theme.of(context).colorScheme.primary 
-        : Colors.red;
+    final appBarColor =
+        hasInternet ? Theme.of(context).colorScheme.primary : Colors.red;
 
     final scaffold = Scaffold(
       appBar: AppBar(
@@ -93,7 +92,8 @@ class _StaffHomePageState extends ConsumerState<StaffHomePage> {
         foregroundColor: Colors.white, // Белый цвет для всех элементов AppBar
         title: Text(
           appBarTitle,
-          style: const TextStyle(color: Colors.white), // Явно указываем белый цвет
+          style:
+              const TextStyle(color: Colors.white), // Явно указываем белый цвет
         ),
         bottom: showTabs
             ? TabBar(
@@ -109,7 +109,8 @@ class _StaffHomePageState extends ConsumerState<StaffHomePage> {
         actions: [
           IconButton(
             tooltip: 'Выйти',
-            icon: const Icon(Icons.logout, color: Colors.white), // Явно указываем белый цвет
+            icon: const Icon(Icons.logout,
+                color: Colors.white), // Явно указываем белый цвет
             onPressed: () =>
                 ref.read(authControllerProvider.notifier).signOut(),
           ),
@@ -122,18 +123,18 @@ class _StaffHomePageState extends ConsumerState<StaffHomePage> {
               data: (items) {
                 // Получаем данные о прибыли для передачи в ExpansionTile
                 final profitData = staffProfitAsync.valueOrNull;
-                
+
                 // Для водителей/гидов (showTabs = true) мы уже получаем только их бронирования
                 // через /api/bookings/driver, поэтому все экскурсии уже "назначены"
                 // Для остальных ролей фильтруем по assignedStaff
                 final assigned = showTabs
                     ? items // Для водителей/гидов берем все (уже отфильтровано на бэкенде)
                     : items
-                    .where(
-                      (excursion) => excursion.assignedStaff
-                          .any((staff) => staff.id == widget.user.id),
-                    )
-                    .toList();
+                        .where(
+                          (excursion) => excursion.assignedStaff
+                              .any((staff) => staff.id == widget.user.id),
+                        )
+                        .toList();
 
                 Widget buildList(List<Excursion> list, String emptyText) {
                   if (list.isEmpty) {
@@ -149,16 +150,17 @@ class _StaffHomePageState extends ConsumerState<StaffHomePage> {
                       final staffMember = excursion.assignedStaff
                           .where((staff) => staff.id == widget.user.id)
                           .firstOrNull;
-                      final role = staffMember?.roleInExcursion ?? 
+                      final role = staffMember?.roleInExcursion ??
                           (isDriver ? 'driver' : 'guide');
-                      final isExpanded = _expandedExcursionIds.contains(excursion.id);
+                      final isExpanded =
+                          _expandedExcursionIds.contains(excursion.id);
                       return Card(
                         elevation: isExpanded ? 4 : 1,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
                           side: BorderSide(
-                            color: isExpanded 
-                                ? Theme.of(context).colorScheme.primary 
+                            color: isExpanded
+                                ? Theme.of(context).colorScheme.primary
                                 : Colors.transparent,
                             width: isExpanded ? 2 : 0,
                           ),
@@ -169,7 +171,7 @@ class _StaffHomePageState extends ConsumerState<StaffHomePage> {
                             style: Theme.of(context).textTheme.titleMedium,
                           ),
                           subtitle: Text(
-                            formatter.format(excursion.dateTime),
+                            _buildExcursionHeaderMeta(excursion, formatter),
                           ),
                           onExpansionChanged: (expanded) {
                             setState(() {
@@ -196,25 +198,27 @@ class _StaffHomePageState extends ConsumerState<StaffHomePage> {
                                     excursionDate: excursion.dateTime,
                                     profitData: profitData,
                                   ),
-                                  // Остановки, указанные в бронированиях (что важно водителю)
+                                  // Ведомость по остановкам и расчетам
                                   const SizedBox(height: 12),
                                   const Text(
-                                    'Посадка пассажиров:',
+                                    'Ведомость экскурсии:',
                                     style: TextStyle(
                                       fontWeight: FontWeight.bold,
                                     ),
                                   ),
                                   const SizedBox(height: 8),
                                   _BookedStopsFromSeats(
-                                      busSeats: excursion.busSeats),
+                                    excursion: excursion,
+                                    busSeats: excursion.busSeats,
+                                  ),
                                   const SizedBox(height: 16),
                                   // Полный список остановок — убираем в collapsible
                                   ExpansionTile(
                                     tilePadding: EdgeInsets.zero,
                                     title: const Text(
                                       'Все остановки маршрута',
-                                      style:
-                                          TextStyle(fontWeight: FontWeight.bold),
+                                      style: TextStyle(
+                                          fontWeight: FontWeight.bold),
                                     ),
                                     children: [
                                       FutureBuilder<List<Stop>>(
@@ -248,8 +252,7 @@ class _StaffHomePageState extends ConsumerState<StaffHomePage> {
                                           final stops = snapshot.data ?? [];
                                           if (stops.isEmpty) {
                                             return const Padding(
-                                              padding:
-                                                  EdgeInsets.all(8.0),
+                                              padding: EdgeInsets.all(8.0),
                                               child:
                                                   Text('Остановки не указаны'),
                                             );
@@ -267,8 +270,7 @@ class _StaffHomePageState extends ConsumerState<StaffHomePage> {
                                                           Icon(
                                                             Icons.location_on,
                                                             size: 16,
-                                                            color:
-                                                                Colors.grey,
+                                                            color: Colors.grey,
                                                           ),
                                                           const SizedBox(
                                                               width: 8),
@@ -285,7 +287,7 @@ class _StaffHomePageState extends ConsumerState<StaffHomePage> {
                                       ),
                                     ],
                                   ),
-                              const SizedBox(height: 16),
+                                  const SizedBox(height: 16),
                                 ],
                               ),
                             ),
@@ -310,13 +312,9 @@ class _StaffHomePageState extends ConsumerState<StaffHomePage> {
                   );
                 }
 
-                final upcomingList = assigned
-                    .where((e) => !e.isPast)
-                    .toList()
+                final upcomingList = assigned.where((e) => !e.isPast).toList()
                   ..sort((a, b) => a.dateTime.compareTo(b.dateTime));
-                final pastList = assigned
-                    .where((e) => e.isPast)
-                    .toList()
+                final pastList = assigned.where((e) => e.isPast).toList()
                   ..sort((a, b) => b.dateTime.compareTo(a.dateTime));
 
                 return TabBarView(
@@ -382,16 +380,17 @@ class _StaffHomePageState extends ConsumerState<StaffHomePage> {
                     final staffMember = excursion.assignedStaff
                         .where((staff) => staff.id == widget.user.id)
                         .firstOrNull;
-                    final role = staffMember?.roleInExcursion ?? 
+                    final role = staffMember?.roleInExcursion ??
                         (isDriver ? 'driver' : 'guide');
-                    final isExpanded = _expandedExcursionIds.contains(excursion.id);
+                    final isExpanded =
+                        _expandedExcursionIds.contains(excursion.id);
                     return Card(
                       elevation: isExpanded ? 4 : 1,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
                         side: BorderSide(
-                          color: isExpanded 
-                              ? Theme.of(context).colorScheme.primary 
+                          color: isExpanded
+                              ? Theme.of(context).colorScheme.primary
                               : Colors.transparent,
                           width: isExpanded ? 2 : 0,
                         ),
@@ -402,7 +401,7 @@ class _StaffHomePageState extends ConsumerState<StaffHomePage> {
                           style: Theme.of(context).textTheme.titleMedium,
                         ),
                         subtitle: Text(
-                          formatter.format(excursion.dateTime),
+                          _buildExcursionHeaderMeta(excursion, formatter),
                         ),
                         onExpansionChanged: (expanded) {
                           setState(() {
@@ -431,14 +430,16 @@ class _StaffHomePageState extends ConsumerState<StaffHomePage> {
                                 ),
                                 const SizedBox(height: 12),
                                 const Text(
-                                  'Посадка пассажиров:',
+                                  'Ведомость экскурсии:',
                                   style: TextStyle(
                                     fontWeight: FontWeight.bold,
                                   ),
                                 ),
                                 const SizedBox(height: 8),
                                 _BookedStopsFromSeats(
-                                    busSeats: excursion.busSeats),
+                                  excursion: excursion,
+                                  busSeats: excursion.busSeats,
+                                ),
                                 const SizedBox(height: 16),
                                 ExpansionTile(
                                   tilePadding: EdgeInsets.zero,
@@ -451,8 +452,7 @@ class _StaffHomePageState extends ConsumerState<StaffHomePage> {
                                     FutureBuilder<List<Stop>>(
                                       future: ref
                                           .read(stopsRepositoryProvider)
-                                          .fetchStopsForExcursion(
-                                              excursion.id),
+                                          .fetchStopsForExcursion(excursion.id),
                                       builder: (context, snapshot) {
                                         if (snapshot.connectionState ==
                                             ConnectionState.waiting) {
@@ -466,8 +466,7 @@ class _StaffHomePageState extends ConsumerState<StaffHomePage> {
                                         }
                                         if (snapshot.hasError) {
                                           return Padding(
-                                            padding:
-                                                const EdgeInsets.all(8.0),
+                                            padding: const EdgeInsets.all(8.0),
                                             child: Text(
                                               'Ошибка загрузки остановок: ${snapshot.error}',
                                               style: TextStyle(
@@ -479,10 +478,8 @@ class _StaffHomePageState extends ConsumerState<StaffHomePage> {
                                         final stops = snapshot.data ?? [];
                                         if (stops.isEmpty) {
                                           return const Padding(
-                                            padding:
-                                                EdgeInsets.all(8.0),
-                                            child:
-                                                Text('Остановки не указаны'),
+                                            padding: EdgeInsets.all(8.0),
+                                            child: Text('Остановки не указаны'),
                                           );
                                         }
                                         return Column(
@@ -498,8 +495,7 @@ class _StaffHomePageState extends ConsumerState<StaffHomePage> {
                                                         Icon(
                                                           Icons.location_on,
                                                           size: 16,
-                                                          color:
-                                                              Colors.grey,
+                                                          color: Colors.grey,
                                                         ),
                                                         const SizedBox(
                                                             width: 8),
@@ -546,7 +542,8 @@ class _SeatsGrid extends StatelessWidget {
       return const Text('Схема мест недоступна');
     }
 
-    final sorted = [...busSeats]..sort((a, b) => a.seatNumber.compareTo(b.seatNumber));
+    final sorted = [...busSeats]
+      ..sort((a, b) => a.seatNumber.compareTo(b.seatNumber));
 
     return Wrap(
       spacing: 8,
@@ -554,18 +551,17 @@ class _SeatsGrid extends StatelessWidget {
       children: sorted.map((seat) {
         final booking = seat.booking;
         final hasBooking = booking != null;
-        final label = StringBuffer()
-          ..write(seat.seatNumber);
+        final label = StringBuffer()..write(seat.seatNumber);
         if (hasBooking && booking.customerName.isNotEmpty) {
           label.write(' — ${booking.customerName}');
         }
-        
+
         // Добавляем информацию о продавце
         final sellerInfo = <String>[];
         if (seat.bookedByInfo != null) {
           sellerInfo.add('${seat.bookedByInfo!.name}');
         }
-        
+
         // Преобразуем тип пассажира на русский
         String passengerTypeText = '';
         if (hasBooking && booking.passengerType.isNotEmpty) {
@@ -593,27 +589,29 @@ class _SeatsGrid extends StatelessWidget {
               passengerTypeText = booking.passengerType;
           }
         }
-        
+
         final subtitle = hasBooking
             ? [
                 if (passengerTypeText.isNotEmpty) passengerTypeText,
-                if (booking.stopTitle?.isNotEmpty ?? false)
-                  booking.stopTitle!,
+                if (booking.stopTitle?.isNotEmpty ?? false) booking.stopTitle!,
                 if (booking.customerPhone.isNotEmpty) booking.customerPhone,
                 ...sellerInfo,
               ].where((e) => e.isNotEmpty).join('\n')
-            : (seat.status == 'available' 
-                ? 'Свободно' 
-                : (seat.bookedByInfo != null && seat.bookedByInfo!.name.isNotEmpty
+            : (seat.status == 'available'
+                ? 'Свободно'
+                : (seat.bookedByInfo != null &&
+                        seat.bookedByInfo!.name.isNotEmpty
                     ? seat.bookedByInfo!.name
                     : 'Занято'));
 
         // Используем цвет продавца, если он есть, иначе стандартные цвета
         Color seatColor;
-        if (seat.bookedByInfo?.color != null && seat.bookedByInfo!.color!.isNotEmpty) {
+        if (seat.bookedByInfo?.color != null &&
+            seat.bookedByInfo!.color!.isNotEmpty) {
           try {
             final hexColor = seat.bookedByInfo!.color!;
-            seatColor = Color(int.parse(hexColor.substring(1), radix: 16) + 0xFF000000);
+            seatColor =
+                Color(int.parse(hexColor.substring(1), radix: 16) + 0xFF000000);
           } catch (e) {
             seatColor = hasBooking
                 ? Colors.blue.shade100
@@ -661,66 +659,423 @@ class _SeatsGrid extends StatelessWidget {
 }
 
 class _BookedStopsFromSeats extends StatelessWidget {
-  const _BookedStopsFromSeats({required this.busSeats});
+  const _BookedStopsFromSeats({
+    required this.excursion,
+    required this.busSeats,
+  });
 
+  final Excursion excursion;
   final List<BusSeat> busSeats;
 
   @override
   Widget build(BuildContext context) {
-    // Группируем места по остановкам
-    final Map<String, List<BusSeat>> stopsMap = {};
-    
-    for (final seat in busSeats) {
-      final stopTitle = seat.booking?.stopTitle ?? '';
-      if (stopTitle.isNotEmpty) {
-        stopsMap.putIfAbsent(stopTitle, () => []).add(seat);
-      }
-    }
+    final stops = _buildStopManifest(busSeats);
+    final transportCost = _resolveStaffCost(excursion, 'driver');
+    final guideCost = _resolveStaffCost(excursion, 'guide');
+    final entryTicketsCost = _resolveEntryTicketsCost(excursion, busSeats);
+    final revenue = _resolveRevenue(excursion, busSeats);
+    final total = revenue - transportCost - guideCost - entryTicketsCost;
 
-    if (stopsMap.isEmpty) {
-      return const Text('Остановки будут показаны после бронирований.');
+    if (stops.isEmpty) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.grey.shade50,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.grey.shade300),
+        ),
+        child: const Text('Остановки будут показаны после бронирований.'),
+      );
     }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
-      children: stopsMap.entries.map((entry) {
-        final stopTitle = entry.key;
-        final seats = entry.value;
-        
-        return Card(
-          margin: const EdgeInsets.only(bottom: 12),
-          child: ExpansionTile(
-            tilePadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            childrenPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-            leading: const Icon(Icons.flag, size: 18, color: Colors.blueGrey),
-            title: Text(
-              stopTitle,
-              style: const TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 16,
-              ),
+      children: [
+        ...stops.map((stop) {
+          return Container(
+            width: double.infinity,
+            margin: const EdgeInsets.only(bottom: 12),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.grey.shade300),
             ),
-            subtitle: Text(
-              'Мест занято: ${seats.length}',
-              style: TextStyle(
-                fontSize: 12,
-                color: Colors.grey.shade600,
-                fontStyle: FontStyle.italic,
-              ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.flag, size: 18, color: Colors.blueGrey),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        stop.title,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
+                      ),
+                    ),
+                    Text(
+                      '${stop.seats.length} мест',
+                      style: TextStyle(
+                        color: Colors.grey.shade700,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                ...stop.sellers.map((seller) {
+                  final sellerColor = seller.color?.isNotEmpty == true
+                      ? _parseHexColor(seller.color!)
+                      : Colors.orange.shade200;
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade50,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: Colors.grey.shade200),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                          width: 12,
+                          height: 12,
+                          margin: const EdgeInsets.only(top: 4),
+                          decoration: BoxDecoration(
+                            color: sellerColor,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                seller.name,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                'Места: ${seller.seats.map((seat) => seat.seatNumber).join(', ')}',
+                                style: TextStyle(color: Colors.grey.shade800),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                seller.seats
+                                    .map((seat) => _passengerTypeLabel(
+                                          seat.booking?.passengerType ?? '',
+                                        ))
+                                    .where((value) => value.isNotEmpty)
+                                    .join(', '),
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.grey.shade600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }),
+              ],
             ),
+          );
+        }),
+        const SizedBox(height: 8),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: Colors.green.shade50,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.green.shade200),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: seats.map((seat) {
-                  return _SeatCard(seat: seat);
-                }).toList(),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _FinanceRow(
+                      label: 'Транспорт',
+                      value: '${transportCost.toStringAsFixed(0)} ₽',
+                    ),
+                    const SizedBox(height: 6),
+                    _FinanceRow(
+                      label: 'Экскурсовод',
+                      value: '${guideCost.toStringAsFixed(0)} ₽',
+                    ),
+                    const SizedBox(height: 6),
+                    _FinanceRow(
+                      label: 'Входные билеты',
+                      value: '${entryTicketsCost.toStringAsFixed(0)} ₽',
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      'Свободные места: ${excursion.availableSeatsCount}',
+                      textAlign: TextAlign.right,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Выручка: ${revenue.toStringAsFixed(0)} ₽',
+                      textAlign: TextAlign.right,
+                      style: TextStyle(color: Colors.grey.shade700),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Итого: ${total.toStringAsFixed(0)} ₽',
+                      textAlign: TextAlign.right,
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 18,
+                        color: Colors.green.shade800,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ],
           ),
-        );
-      }).toList(),
+        ),
+      ],
     );
+  }
+}
+
+class _FinanceRow extends StatelessWidget {
+  const _FinanceRow({
+    required this.label,
+    required this.value,
+  });
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(child: Text(label)),
+        const SizedBox(width: 8),
+        Text(
+          value,
+          style: const TextStyle(fontWeight: FontWeight.w600),
+        ),
+      ],
+    );
+  }
+}
+
+class _ManifestStopGroup {
+  const _ManifestStopGroup({
+    required this.title,
+    required this.order,
+    required this.seats,
+    required this.sellers,
+  });
+
+  final String title;
+  final int order;
+  final List<BusSeat> seats;
+  final List<_ManifestSellerGroup> sellers;
+}
+
+class _ManifestSellerGroup {
+  const _ManifestSellerGroup({
+    required this.name,
+    required this.color,
+    required this.seats,
+  });
+
+  final String name;
+  final String? color;
+  final List<BusSeat> seats;
+}
+
+List<_ManifestStopGroup> _buildStopManifest(List<BusSeat> busSeats) {
+  final groupedStops = <String, List<BusSeat>>{};
+
+  for (final seat in busSeats) {
+    final booking = seat.booking;
+    final stopTitle = booking?.stopTitle?.trim() ?? '';
+    if (stopTitle.isEmpty) {
+      continue;
+    }
+    groupedStops.putIfAbsent(stopTitle, () => []).add(seat);
+  }
+
+  final result = groupedStops.entries.map((entry) {
+    final seats = [...entry.value]
+      ..sort((a, b) => a.seatNumber.compareTo(b.seatNumber));
+    final stopOrders = seats
+        .map((seat) => seat.booking?.stopOrder)
+        .whereType<int>()
+        .toList()
+      ..sort();
+    final stopOrder = stopOrders.isNotEmpty ? stopOrders.first : 9999;
+
+    final sellersMap = <String, List<BusSeat>>{};
+    for (final seat in seats) {
+      final sellerName = seat.bookedByInfo?.name.trim().isNotEmpty == true
+          ? seat.bookedByInfo!.name.trim()
+          : 'Без продавца';
+      sellersMap.putIfAbsent(sellerName, () => []).add(seat);
+    }
+
+    final sellers = sellersMap.entries.map((sellerEntry) {
+      final sellerSeats = [...sellerEntry.value]
+        ..sort((a, b) => a.seatNumber.compareTo(b.seatNumber));
+      return _ManifestSellerGroup(
+        name: sellerEntry.key,
+        color: sellerSeats.first.bookedByInfo?.color,
+        seats: sellerSeats,
+      );
+    }).toList()
+      ..sort((a, b) => a.name.compareTo(b.name));
+
+    return _ManifestStopGroup(
+      title: entry.key,
+      order: stopOrder,
+      seats: seats,
+      sellers: sellers,
+    );
+  }).toList()
+    ..sort((a, b) {
+      final orderCompare = a.order.compareTo(b.order);
+      if (orderCompare != 0) {
+        return orderCompare;
+      }
+      return a.title.compareTo(b.title);
+    });
+
+  return result;
+}
+
+String _buildExcursionHeaderMeta(Excursion excursion, DateFormat formatter) {
+  return '${formatter.format(excursion.dateTime)} • '
+      'Места ${excursion.bookedSeatsCount}/${excursion.maxSeats}';
+}
+
+double _resolveStaffCost(Excursion excursion, String staffType) {
+  final actualBookedSeats =
+      excursion.busSeats.where((seat) => seat.booking != null).length;
+
+  if (actualBookedSeats <= 0) {
+    return 0;
+  }
+
+  final hasAssignedStaff = excursion.assignedStaff.any(
+    (staff) => staff.roleInExcursion == staffType,
+  );
+  if (!hasAssignedStaff) {
+    return 0;
+  }
+
+  final matchingPrice = excursion.staffPrices.firstWhereOrNull((price) {
+    if (price.staffType != staffType) {
+      return false;
+    }
+    if (actualBookedSeats < price.minPassengers) {
+      return false;
+    }
+    if (price.maxPassengers != null &&
+        actualBookedSeats > price.maxPassengers!) {
+      return false;
+    }
+    return true;
+  });
+
+  return matchingPrice?.price ?? 0;
+}
+
+double _resolveRevenue(Excursion excursion, List<BusSeat> busSeats) {
+  return busSeats.fold<double>(0, (sum, seat) {
+    final booking = seat.booking;
+    if (booking == null) {
+      return sum;
+    }
+    if (booking.price != null) {
+      return sum + booking.price!;
+    }
+    final tariff =
+        excursion.tariffs[booking.passengerType] ?? excursion.tariffs['adult'];
+    if (tariff == null) {
+      return sum;
+    }
+    final fallbackPrice = booking.withEntry
+        ? (tariff.priceWithEntry ?? tariff.price)
+        : (tariff.priceWithoutEntry ?? tariff.price);
+    return sum + fallbackPrice;
+  });
+}
+
+double _resolveEntryTicketsCost(Excursion excursion, List<BusSeat> busSeats) {
+  return busSeats.fold<double>(0, (sum, seat) {
+    final booking = seat.booking;
+    if (booking == null || !booking.withEntry) {
+      return sum;
+    }
+    final tariff =
+        excursion.tariffs[booking.passengerType] ?? excursion.tariffs['adult'];
+    if (tariff == null) {
+      return sum;
+    }
+    final withEntry = tariff.priceWithEntry ?? tariff.price;
+    final withoutEntry = tariff.priceWithoutEntry ?? tariff.price;
+    final diff = withEntry - withoutEntry;
+    return sum + (diff > 0 ? diff : 0);
+  });
+}
+
+String _passengerTypeLabel(String value) {
+  switch (value.toLowerCase()) {
+    case 'adult':
+      return 'Взрослый';
+    case 'child':
+      return 'Детский';
+    case 'senior':
+      return 'Пенсионер';
+    case 'disabled':
+      return 'Инвалид';
+    case 'special':
+      return 'Спеццена';
+    case 'concession':
+      return 'Льготный';
+    default:
+      return value;
+  }
+}
+
+Color _parseHexColor(String hexColor) {
+  try {
+    return Color(
+      int.parse(hexColor.replaceFirst('#', ''), radix: 16) + 0xFF000000,
+    );
+  } catch (_) {
+    return Colors.orange.shade200;
   }
 }
 
@@ -840,7 +1195,8 @@ class _SeatCard extends StatelessWidget {
                 ),
                 child: Row(
                   children: [
-                    if (sellerInfo.color != null && sellerInfo.color!.isNotEmpty)
+                    if (sellerInfo.color != null &&
+                        sellerInfo.color!.isNotEmpty)
                       Container(
                         width: 20,
                         height: 20,
@@ -950,7 +1306,8 @@ class _CollapsibleInfoRowState extends State<_CollapsibleInfoRow> {
                   });
                 },
                 child: Container(
-                  padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                  padding:
+                      const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
                   decoration: BoxDecoration(
                     color: Colors.blue.shade50,
                     borderRadius: BorderRadius.circular(8),
@@ -981,7 +1338,8 @@ class _CollapsibleInfoRowState extends State<_CollapsibleInfoRow> {
                     });
                   },
                   child: Container(
-                    padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                    padding: const EdgeInsets.symmetric(
+                        vertical: 12, horizontal: 16),
                     decoration: BoxDecoration(
                       color: Colors.green.shade50,
                       borderRadius: BorderRadius.circular(8),
@@ -990,7 +1348,7 @@ class _CollapsibleInfoRowState extends State<_CollapsibleInfoRow> {
                     child: Row(
                       children: [
                         const Icon(Icons.currency_ruble, color: Colors.green),
-                      const Spacer(),
+                        const Spacer(),
                         Icon(
                           _isProfitExpanded
                               ? Icons.expand_less
@@ -1053,11 +1411,11 @@ class _ProfitTab extends StatelessWidget {
   Widget build(BuildContext context) {
     return staffProfitAsync.when(
       loading: () => const Center(child: CircularProgressIndicator()),
-      error: (_, __) => const Center(child: Text('Ошибка загрузки данных о прибыли')),
+      error: (_, __) =>
+          const Center(child: Text('Ошибка загрузки данных о прибыли')),
       data: (profitData) {
-        final breakdown =
-            profitData['breakdown'] as List<dynamic>? ?? [];
-        
+        final breakdown = profitData['breakdown'] as List<dynamic>? ?? [];
+
         // Фильтруем breakdown по датам
         List<dynamic> filteredBreakdown = breakdown;
         if (selectedDateFrom != null || selectedDateTo != null) {
@@ -1069,16 +1427,20 @@ class _ProfitTab extends StatelessWidget {
             try {
               final date = DateTime.parse(dateTime);
               final dateOnly = DateTime(date.year, date.month, date.day);
-              
+
               if (selectedDateFrom != null) {
-                final fromDate = DateTime(selectedDateFrom!.year, selectedDateFrom!.month, selectedDateFrom!.day);
+                final fromDate = DateTime(selectedDateFrom!.year,
+                    selectedDateFrom!.month, selectedDateFrom!.day);
                 if (dateOnly.isBefore(fromDate)) {
                   return false;
                 }
               }
               if (selectedDateTo != null) {
-                final toDate = DateTime(selectedDateTo!.year, selectedDateTo!.month, selectedDateTo!.day).add(const Duration(days: 1));
-                if (dateOnly.isAfter(toDate.subtract(const Duration(seconds: 1)))) {
+                final toDate = DateTime(selectedDateTo!.year,
+                        selectedDateTo!.month, selectedDateTo!.day)
+                    .add(const Duration(days: 1));
+                if (dateOnly
+                    .isAfter(toDate.subtract(const Duration(seconds: 1)))) {
                   return false;
                 }
               }
@@ -1088,13 +1450,13 @@ class _ProfitTab extends StatelessWidget {
             }
           }).toList();
         }
-        
+
         // Пересчитываем общую прибыль для отфильтрованных данных
         double filteredTotalProfit = filteredBreakdown.fold<double>(
           0.0,
           (sum, item) => sum + ((item['profit'] as num?)?.toDouble() ?? 0.0),
         );
-        
+
         return SingleChildScrollView(
           padding: const EdgeInsets.all(16),
           child: Column(
@@ -1119,14 +1481,16 @@ class _ProfitTab extends StatelessWidget {
                               icon: const Icon(Icons.calendar_today, size: 18),
                               label: Text(
                                 selectedDateFrom != null
-                                    ? DateFormat('dd.MM.yyyy', 'ru_RU').format(selectedDateFrom!)
+                                    ? DateFormat('dd.MM.yyyy', 'ru_RU')
+                                        .format(selectedDateFrom!)
                                     : 'От',
                                 style: const TextStyle(fontSize: 12),
                               ),
                               onPressed: () async {
                                 final picked = await showDatePicker(
                                   context: context,
-                                  initialDate: selectedDateFrom ?? DateTime.now(),
+                                  initialDate:
+                                      selectedDateFrom ?? DateTime.now(),
                                   firstDate: DateTime(2020),
                                   lastDate: DateTime(2100),
                                 );
@@ -1142,7 +1506,8 @@ class _ProfitTab extends StatelessWidget {
                               icon: const Icon(Icons.calendar_today, size: 18),
                               label: Text(
                                 selectedDateTo != null
-                                    ? DateFormat('dd.MM.yyyy', 'ru_RU').format(selectedDateTo!)
+                                    ? DateFormat('dd.MM.yyyy', 'ru_RU')
+                                        .format(selectedDateTo!)
                                     : 'До',
                                 style: const TextStyle(fontSize: 12),
                               ),
@@ -1159,7 +1524,8 @@ class _ProfitTab extends StatelessWidget {
                               },
                             ),
                           ),
-                          if (selectedDateFrom != null || selectedDateTo != null)
+                          if (selectedDateFrom != null ||
+                              selectedDateTo != null)
                             IconButton(
                               icon: const Icon(Icons.clear, size: 20),
                               onPressed: onDatesCleared,
@@ -1195,9 +1561,10 @@ class _ProfitTab extends StatelessWidget {
                               : selectedDateFrom != null
                                   ? 'С ${DateFormat('dd.MM.yyyy', 'ru_RU').format(selectedDateFrom!)}'
                                   : 'До ${DateFormat('dd.MM.yyyy', 'ru_RU').format(selectedDateTo!)}',
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: Colors.grey.shade700,
-                          ),
+                          style:
+                              Theme.of(context).textTheme.bodySmall?.copyWith(
+                                    color: Colors.grey.shade700,
+                                  ),
                         ),
                       ),
                     const SizedBox(height: 4),
@@ -1233,9 +1600,8 @@ class _ProfitTab extends StatelessWidget {
                       }
                       return ListTile(
                         title: Text(excursionTitle),
-                        subtitle: date != null
-                            ? Text(formatter.format(date))
-                            : null,
+                        subtitle:
+                            date != null ? Text(formatter.format(date)) : null,
                         trailing: Text(
                           '${profit.toStringAsFixed(2)} ₽',
                           style: TextStyle(
@@ -1290,11 +1656,11 @@ class _ProfitDetails extends StatelessWidget {
       (e) {
         final eId = e['excursion_id'] as int?;
         if (eId != excursionId) return false;
-        
+
         // Проверяем дату
         final dateTimeStr = e['date_time'] as String?;
         if (dateTimeStr == null || dateTimeStr.isEmpty) return false;
-        
+
         try {
           final itemDate = DateTime.parse(dateTimeStr);
           // Сравниваем дату и время (без секунд и миллисекунд)
@@ -1327,7 +1693,8 @@ class _ProfitDetails extends StatelessWidget {
     final profit = (item['profit'] as num?)?.toDouble() ?? 0.0;
     final passengerCount = item['passenger_count'] as int? ?? 0;
     final totalRevenue = (item['total_revenue'] as num?)?.toDouble() ?? 0.0;
-    final passengersByType = item['passengers_by_type'] as Map<String, dynamic>? ?? {};
+    final passengersByType =
+        item['passengers_by_type'] as Map<String, dynamic>? ?? {};
     final staffPriceInfo = item['staff_price_info'] as Map<String, dynamic>?;
 
     return Container(

@@ -1,7 +1,11 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
 
 import '../../data/models/excursion.dart';
 import '../../data/models/user.dart';
@@ -18,6 +22,7 @@ import '../../core/api/api_helpers.dart';
 import '../auth/auth_controller.dart';
 import '../seller/widgets/booking_dialog.dart';
 import '../common/utils/pdf_downloader.dart';
+import '../common/utils/ticket_generator.dart';
 import '../common/widgets/cancellation_reason_dialog.dart';
 import 'widgets/users_tab.dart';
 import 'widgets/assign_staff_sheet.dart';
@@ -364,6 +369,7 @@ class _NewBookingSubTab extends ConsumerStatefulWidget {
 class _NewBookingSubTabState extends ConsumerState<_NewBookingSubTab>
     with SingleTickerProviderStateMixin {
   DateTime? _selectedDate;
+  bool _showManagementButtons = true;
   late TabController _tabController;
 
   @override
@@ -400,21 +406,49 @@ class _NewBookingSubTabState extends ConsumerState<_NewBookingSubTab>
       children: [
         Padding(
           padding: const EdgeInsets.all(16),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          child: Wrap(
+            alignment: WrapAlignment.spaceBetween,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            runSpacing: 12,
+            spacing: 12,
             children: [
               Text(
                 'Новое бронирование',
                 style: Theme.of(context).textTheme.titleMedium,
               ),
-              OutlinedButton.icon(
-                icon: const Icon(Icons.calendar_today, size: 18),
-                label: Text(
-                  _selectedDate == null
-                      ? 'Выбрать дату'
-                      : DateFormat('dd.MM.yyyy').format(_selectedDate!),
-                ),
-                onPressed: () => _selectDate(context),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  OutlinedButton.icon(
+                    icon: Icon(
+                      _showManagementButtons
+                          ? Icons.visibility_off_outlined
+                          : Icons.visibility_outlined,
+                      size: 18,
+                    ),
+                    label: Text(
+                      _showManagementButtons
+                          ? 'Скрыть кнопки'
+                          : 'Показать кнопки',
+                    ),
+                    onPressed: () {
+                      setState(() {
+                        _showManagementButtons = !_showManagementButtons;
+                      });
+                    },
+                  ),
+                  OutlinedButton.icon(
+                    icon: const Icon(Icons.calendar_today, size: 18),
+                    label: Text(
+                      _selectedDate == null
+                          ? 'Выбрать дату'
+                          : DateFormat('dd.MM.yyyy').format(_selectedDate!),
+                    ),
+                    onPressed: () => _selectDate(context),
+                  ),
+                ],
               ),
             ],
           ),
@@ -535,9 +569,11 @@ class _NewBookingSubTabState extends ConsumerState<_NewBookingSubTab>
                         subtitle: Text(
                             '${dayItems.length} ${dayItems.length == 1 ? 'экскурсия' : dayItems.length < 5 ? 'экскурсии' : 'экскурсий'}'),
                         children: [
-                          const Padding(
-                            padding: EdgeInsets.fromLTRB(20, 8, 20, 2),
-                            child: _ExcursionsTableHeader(),
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(20, 8, 20, 2),
+                            child: _ExcursionsTableHeader(
+                              showActionButtons: _showManagementButtons,
+                            ),
                           ),
                           ...dayItems.asMap().entries.map((entry) => Padding(
                                 padding: const EdgeInsets.symmetric(
@@ -547,6 +583,7 @@ class _NewBookingSubTabState extends ConsumerState<_NewBookingSubTab>
                                   formatter: timeFormatter,
                                   user: widget.user,
                                   index: entry.key,
+                                  showActionButtons: _showManagementButtons,
                                 ),
                               )),
                         ],
@@ -1478,13 +1515,16 @@ class _AllBookingsSubTabState extends ConsumerState<_AllBookingsSubTab>
 }
 
 class _ExcursionsTableHeader extends StatelessWidget {
-  const _ExcursionsTableHeader();
+  const _ExcursionsTableHeader({
+    this.showActionButtons = true,
+  });
 
-  static const int titleFlex = 7;
-  static const int seatsFlex = 2;
+  final bool showActionButtons;
+
+  static const int titleFlex = 9;
   static const int driverFlex = 3;
   static const int guideFlex = 3;
-  static const double actionsWidth = 152;
+  static const double actionsWidth = 156;
 
   @override
   Widget build(BuildContext context) {
@@ -1502,18 +1542,14 @@ class _ExcursionsTableHeader extends StatelessWidget {
           child: Text('Название', style: style),
         ),
         Expanded(
-          flex: seatsFlex,
-          child: Text('Мест', style: style, textAlign: TextAlign.center),
-        ),
-        Expanded(
           flex: driverFlex,
-          child: Text('Водитель', style: style, textAlign: TextAlign.center),
+          child: Text('Вод', style: style, textAlign: TextAlign.center),
         ),
         Expanded(
           flex: guideFlex,
-          child: Text('Экскурсовод', style: style, textAlign: TextAlign.center),
+          child: Text('Экс', style: style, textAlign: TextAlign.center),
         ),
-        const SizedBox(width: actionsWidth),
+        if (showActionButtons) const SizedBox(width: actionsWidth),
       ],
     );
   }
@@ -1597,15 +1633,16 @@ class _AdminExcursionCard extends ConsumerWidget {
     required this.formatter,
     required this.user,
     required this.index,
+    required this.showActionButtons,
   });
 
   final Excursion excursion;
   final DateFormat formatter;
   final User user;
   final int index;
+  final bool showActionButtons;
 
   static const int _titleFlex = _ExcursionsTableHeader.titleFlex;
-  static const int _seatsFlex = _ExcursionsTableHeader.seatsFlex;
   static const int _driverFlex = _ExcursionsTableHeader.driverFlex;
   static const int _guideFlex = _ExcursionsTableHeader.guideFlex;
   static const double _actionsWidth = _ExcursionsTableHeader.actionsWidth;
@@ -1740,31 +1777,13 @@ class _AdminExcursionCard extends ConsumerWidget {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        formatter.format(excursion.dateTime),
+                        '${formatter.format(excursion.dateTime)} • мест ${excursion.availableSeatsCount}/${excursion.maxSeats}',
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
                               color: Colors.blueGrey.shade600,
                               fontSize: 11,
                             ),
                       ),
                     ],
-                  ),
-                ),
-                Expanded(
-                  flex: _seatsFlex,
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 4),
-                    child: Text(
-                      '${excursion.availableSeatsCount}/${excursion.maxSeats}',
-                      textAlign: TextAlign.center,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: excursion.availableSeatsCount !=
-                                    excursion.maxSeats
-                                ? Colors.blue
-                                : Colors.black87,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                          ),
-                    ),
                   ),
                 ),
                 Expanded(
@@ -1799,58 +1818,73 @@ class _AdminExcursionCard extends ConsumerWidget {
                     ),
                   ),
                 ),
-                SizedBox(
-                  width: _actionsWidth,
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      IconButton(
-                        icon: const Icon(Icons.directions_bus, size: 20),
-                        tooltip: 'Автобусы экскурсии',
-                        padding: const EdgeInsets.all(8),
-                        constraints: const BoxConstraints(),
-                        onPressed: excursion.isCancelled
-                            ? null
-                            : () => _showExcursionBuses(context, ref),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.list, size: 20),
-                        tooltip: excursion.isCancelled
-                            ? 'Экскурсия отменена'
-                            : 'Выбрать места',
-                        padding: const EdgeInsets.all(8),
-                        constraints: const BoxConstraints(),
-                        onPressed: (excursion.isCancelled ||
-                                excursion.busSeats.isEmpty)
-                            ? null
-                            : () => _showSeatSheet(context, ref),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.event_seat, size: 20),
-                        tooltip: excursion.isCancelled
-                            ? 'Экскурсия отменена'
-                            : 'Схема рассадки',
-                        padding: const EdgeInsets.all(8),
-                        constraints: const BoxConstraints(),
-                        onPressed: (excursion.busSeats.isEmpty ||
-                                excursion.isCancelled)
-                            ? null
-                            : () => _showSeatingChart(context, ref),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.person_add, size: 20),
-                        tooltip: excursion.isCancelled
-                            ? 'Экскурсия отменена'
-                            : 'Назначить персонал',
-                        padding: const EdgeInsets.all(8),
-                        constraints: const BoxConstraints(),
-                        onPressed: excursion.isCancelled
-                            ? null
-                            : () => _assignStaff(context, ref),
-                      ),
-                    ],
+                if (showActionButtons)
+                  SizedBox(
+                    width: _actionsWidth,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        if (1 == 2)
+                          IconButton(
+                            icon: const Icon(Icons.directions_bus, size: 20),
+                            tooltip: 'Автобусы экскурсии',
+                            padding: const EdgeInsets.all(8),
+                            constraints: const BoxConstraints(),
+                            onPressed: excursion.isCancelled
+                                ? null
+                                : () => _showExcursionBuses(context, ref),
+                          ),
+                        IconButton(
+                          icon: const Icon(Icons.list, size: 20),
+                          tooltip: excursion.isCancelled
+                              ? 'Экскурсия отменена'
+                              : 'Выбрать места',
+                          padding: const EdgeInsets.all(8),
+                          constraints: const BoxConstraints(),
+                          onPressed: (excursion.isCancelled ||
+                                  excursion.busSeats.isEmpty)
+                              ? null
+                              : () => _showSeatSheet(context, ref),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.event_seat, size: 20),
+                          tooltip: excursion.isCancelled
+                              ? 'Экскурсия отменена'
+                              : 'Схема рассадки',
+                          padding: const EdgeInsets.all(8),
+                          constraints: const BoxConstraints(),
+                          onPressed: (excursion.busSeats.isEmpty ||
+                                  excursion.isCancelled)
+                              ? null
+                              : () => _showSeatingChart(context, ref),
+                        ),
+                        IconButton(
+                          icon:
+                              const Icon(Icons.description_outlined, size: 20),
+                          tooltip: excursion.isCancelled
+                              ? 'Экскурсия отменена'
+                              : 'Ведомость',
+                          padding: const EdgeInsets.all(8),
+                          constraints: const BoxConstraints(),
+                          onPressed: (excursion.busSeats.isEmpty ||
+                                  excursion.isCancelled)
+                              ? null
+                              : () => _showManifestDialog(context),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.person_add, size: 20),
+                          tooltip: excursion.isCancelled
+                              ? 'Экскурсия отменена'
+                              : 'Назначить персонал',
+                          padding: const EdgeInsets.all(8),
+                          constraints: const BoxConstraints(),
+                          onPressed: excursion.isCancelled
+                              ? null
+                              : () => _assignStaff(context, ref),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
               ],
             ),
           ],
@@ -1877,7 +1911,7 @@ class _AdminExcursionCard extends ConsumerWidget {
             member.roleInExcursion != 'guide')
         .toList();
 
-    if (mode == StaffIndicatorMode.combined) {
+    if (mode == StaffIndicatorMode.combined && 1 == 2) {
       final totalCount = staff.length;
       return [
         _buildStaffChip(
@@ -1891,7 +1925,7 @@ class _AdminExcursionCard extends ConsumerWidget {
       ];
     }
 
-    final chips = <Widget>[
+    final chips_old = <Widget>[
       if (drivers.isNotEmpty)
         _buildStaffChip(
           context: context,
@@ -1922,12 +1956,10 @@ class _AdminExcursionCard extends ConsumerWidget {
           countLabel: '${others.length}',
         ),
     ];
-
+    final chips = <Widget>[];
     // На случай необычных ролей — хотя бы общий индикатор
-    return chips.isNotEmpty
-        ? chips
-        : [
-            _buildStaffChip(
+    return chips.isNotEmpty ? chips : [];
+/*            _buildStaffChip(
               context: context,
               staff: staff,
               tooltip: 'Назначено: ${staff.length}',
@@ -1935,7 +1967,7 @@ class _AdminExcursionCard extends ConsumerWidget {
               color: Colors.blue,
               countLabel: '${staff.length}',
             ),
-          ];
+          ];*/
   }
 
   Widget _buildStaffChip({
@@ -2477,6 +2509,78 @@ class _AdminExcursionCard extends ConsumerWidget {
     );
   }
 
+  Future<void> _showManifestDialog(BuildContext context) async {
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        titlePadding: const EdgeInsets.fromLTRB(24, 20, 24, 8),
+        contentPadding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              excursion.title,
+              style: Theme.of(dialogContext).textTheme.titleLarge,
+            ),
+            const SizedBox(height: 4),
+            Text(
+              '${formatter.format(excursion.dateTime)} • мест ${excursion.availableSeatsCount}/${excursion.maxSeats}',
+              style: Theme.of(dialogContext).textTheme.bodySmall?.copyWith(
+                    color: Colors.blueGrey.shade600,
+                  ),
+            ),
+          ],
+        ),
+        content: SizedBox(
+          width: 560,
+          child: SingleChildScrollView(
+            child: _AdminExcursionManifestContent(
+              excursion: excursion,
+              hasDriverAssigned: _driversForSlot.isNotEmpty,
+              hasGuideAssigned: _guidesForSlot.isNotEmpty,
+            ),
+          ),
+        ),
+        actions: [
+          FilledButton.icon(
+            onPressed: () async {
+              try {
+                final pdfBytes = await _buildManifestPdfBytes(
+                  excursion: excursion,
+                  formatter: formatter,
+                  hasDriverAssigned: _driversForSlot.isNotEmpty,
+                  hasGuideAssigned: _guidesForSlot.isNotEmpty,
+                );
+                await PdfDownloader.saveAndSharePdf(
+                  pdfBytes: pdfBytes,
+                  filename:
+                      'manifest-${excursion.id}-${DateFormat('yyyyMMdd-HHmm').format(excursion.dateTime)}.pdf',
+                );
+              } catch (error) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Не удалось сформировать PDF: $error'),
+                      behavior: SnackBarBehavior.floating,
+                      margin: const EdgeInsets.all(16),
+                    ),
+                  );
+                }
+              }
+            },
+            icon: const Icon(Icons.picture_as_pdf),
+            label: const Text('PDF'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Закрыть'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _assignStaff(BuildContext context, WidgetRef ref) async {
     final result = await showModalBottomSheet<bool>(
       context: context,
@@ -2527,6 +2631,592 @@ class _AdminExcursionCard extends ConsumerWidget {
       ref.invalidate(excursionsFutureProvider);
     }
   }
+}
+
+class _AdminExcursionManifestContent extends StatelessWidget {
+  const _AdminExcursionManifestContent({
+    required this.excursion,
+    required this.hasDriverAssigned,
+    required this.hasGuideAssigned,
+  });
+
+  final Excursion excursion;
+  final bool hasDriverAssigned;
+  final bool hasGuideAssigned;
+
+  @override
+  Widget build(BuildContext context) {
+    final stops = _buildAdminManifestStops(excursion.busSeats);
+    final transportCost = _resolveAdminStaffCost(
+      excursion,
+      'driver',
+      isAssigned: hasDriverAssigned,
+    );
+    final guideCost = _resolveAdminStaffCost(
+      excursion,
+      'guide',
+      isAssigned: hasGuideAssigned,
+    );
+    final entryTicketsCost = _resolveAdminEntryTicketsCost(excursion);
+    final revenue = _resolveAdminRevenue(excursion);
+    final total = revenue - transportCost - guideCost - entryTicketsCost;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (stops.isEmpty)
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.grey.shade50,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.grey.shade300),
+            ),
+            child: const Text('Остановки будут показаны после бронирований.'),
+          )
+        else
+          ...stops.map((stop) {
+            return Container(
+              width: double.infinity,
+              margin: const EdgeInsets.only(bottom: 12),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.grey.shade300),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.flag, size: 18, color: Colors.blueGrey),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          stop.title,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                          ),
+                        ),
+                      ),
+                      Text(
+                        '${stop.seats.length} мест',
+                        style: TextStyle(
+                          color: Colors.grey.shade700,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  ...stop.sellers.map((seller) {
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade50,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: Colors.grey.shade200),
+                      ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Container(
+                            width: 12,
+                            height: 12,
+                            margin: const EdgeInsets.only(top: 4),
+                            decoration: BoxDecoration(
+                              color: _parseAdminManifestColor(seller.color),
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  seller.name,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  'Места: ${seller.seats.map((seat) => seat.seatNumber).join(', ')}',
+                                  style: TextStyle(color: Colors.grey.shade800),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }),
+                ],
+              ),
+            );
+          }),
+        const SizedBox(height: 8),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: Colors.green.shade50,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.green.shade200),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _AdminManifestFinanceRow(
+                label: 'Транспорт',
+                value: '${transportCost.toStringAsFixed(0)} ₽',
+              ),
+              const SizedBox(height: 6),
+              _AdminManifestFinanceRow(
+                label: 'Экскурсовод',
+                value: '${guideCost.toStringAsFixed(0)} ₽',
+              ),
+              const SizedBox(height: 6),
+              _AdminManifestFinanceRow(
+                label: 'Входные билеты',
+                value: '${entryTicketsCost.toStringAsFixed(0)} ₽',
+              ),
+              const SizedBox(height: 12),
+              _AdminManifestFinanceRow(
+                label: 'Свободные места',
+                value: '${excursion.availableSeatsCount}',
+              ),
+              const SizedBox(height: 6),
+              _AdminManifestFinanceRow(
+                label: 'Выручка',
+                value: '${revenue.toStringAsFixed(0)} ₽',
+                valueColor: Colors.grey.shade700,
+              ),
+              const SizedBox(height: 10),
+              _AdminManifestFinanceRow(
+                label: 'Итого',
+                value: '${total.toStringAsFixed(0)} ₽',
+                isHighlighted: true,
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _AdminManifestFinanceRow extends StatelessWidget {
+  const _AdminManifestFinanceRow({
+    required this.label,
+    required this.value,
+    this.valueColor,
+    this.isHighlighted = false,
+  });
+
+  final String label;
+  final String value;
+  final Color? valueColor;
+  final bool isHighlighted;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: Text(
+            label,
+            style: isHighlighted
+                ? TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 18,
+                    color: Colors.green.shade800,
+                  )
+                : null,
+          ),
+        ),
+        const SizedBox(width: 8),
+        Flexible(
+          child: Align(
+            alignment: Alignment.centerRight,
+            child: Text(
+              value,
+              textAlign: TextAlign.right,
+              softWrap: false,
+              overflow: TextOverflow.visible,
+              style: isHighlighted
+                  ? TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 18,
+                      color: Colors.green.shade800,
+                    )
+                  : TextStyle(
+                      fontWeight: FontWeight.w600,
+                      color: valueColor,
+                    ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _AdminManifestStopGroup {
+  const _AdminManifestStopGroup({
+    required this.title,
+    required this.order,
+    required this.seats,
+    required this.sellers,
+  });
+
+  final String title;
+  final int order;
+  final List<BusSeat> seats;
+  final List<_AdminManifestSellerGroup> sellers;
+}
+
+class _AdminManifestSellerGroup {
+  const _AdminManifestSellerGroup({
+    required this.name,
+    required this.color,
+    required this.seats,
+  });
+
+  final String name;
+  final String? color;
+  final List<BusSeat> seats;
+}
+
+List<_AdminManifestStopGroup> _buildAdminManifestStops(List<BusSeat> busSeats) {
+  final groupedStops = <String, List<BusSeat>>{};
+  for (final seat in busSeats) {
+    final stopTitle = seat.booking?.stopTitle?.trim() ?? '';
+    if (stopTitle.isEmpty) {
+      continue;
+    }
+    groupedStops.putIfAbsent(stopTitle, () => []).add(seat);
+  }
+
+  final result = <_AdminManifestStopGroup>[];
+  for (final entry in groupedStops.entries) {
+    final seats = [...entry.value]
+      ..sort((a, b) => a.seatNumber.compareTo(b.seatNumber));
+
+    int stopOrder = 9999;
+    for (final seat in seats) {
+      final order = seat.booking?.stopOrder;
+      if (order != null && order < stopOrder) {
+        stopOrder = order;
+      }
+    }
+
+    final sellersMap = <String, List<BusSeat>>{};
+    for (final seat in seats) {
+      final sellerName = (seat.bookedByInfo?.name.trim().isNotEmpty ?? false)
+          ? seat.bookedByInfo!.name.trim()
+          : 'Без продавца';
+      sellersMap.putIfAbsent(sellerName, () => []).add(seat);
+    }
+
+    final sellers = <_AdminManifestSellerGroup>[];
+    for (final sellerEntry in sellersMap.entries) {
+      final sellerSeats = [...sellerEntry.value]
+        ..sort((a, b) => a.seatNumber.compareTo(b.seatNumber));
+      sellers.add(
+        _AdminManifestSellerGroup(
+          name: sellerEntry.key,
+          color: sellerSeats.first.bookedByInfo?.color,
+          seats: sellerSeats,
+        ),
+      );
+    }
+    sellers.sort((a, b) => a.name.compareTo(b.name));
+
+    result.add(
+      _AdminManifestStopGroup(
+        title: entry.key,
+        order: stopOrder,
+        seats: seats,
+        sellers: sellers,
+      ),
+    );
+  }
+
+  result.sort((a, b) {
+    final orderCompare = a.order.compareTo(b.order);
+    if (orderCompare != 0) {
+      return orderCompare;
+    }
+    return a.title.compareTo(b.title);
+  });
+
+  return result;
+}
+
+double _resolveAdminStaffCost(
+  Excursion excursion,
+  String staffType, {
+  required bool isAssigned,
+}) {
+  final actualBookedSeats =
+      excursion.busSeats.where((seat) => seat.booking != null).length;
+
+  if (actualBookedSeats <= 0 || !isAssigned) {
+    return 0;
+  }
+
+  for (final price in excursion.staffPrices) {
+    if (price.staffType != staffType) {
+      continue;
+    }
+    if (actualBookedSeats < price.minPassengers) {
+      continue;
+    }
+    if (price.maxPassengers != null &&
+        actualBookedSeats > price.maxPassengers!) {
+      continue;
+    }
+    return price.price;
+  }
+
+  return 0;
+}
+
+double _resolveAdminRevenue(Excursion excursion) {
+  double sum = 0;
+  for (final seat in excursion.busSeats) {
+    final booking = seat.booking;
+    if (booking == null) {
+      continue;
+    }
+    if (booking.price != null) {
+      sum += booking.price!;
+      continue;
+    }
+    final tariff =
+        excursion.tariffs[booking.passengerType] ?? excursion.tariffs['adult'];
+    if (tariff == null) {
+      continue;
+    }
+    sum += booking.withEntry
+        ? (tariff.priceWithEntry ?? tariff.price)
+        : (tariff.priceWithoutEntry ?? tariff.price);
+  }
+  return sum;
+}
+
+double _resolveAdminEntryTicketsCost(Excursion excursion) {
+  double sum = 0;
+  for (final seat in excursion.busSeats) {
+    final booking = seat.booking;
+    if (booking == null || !booking.withEntry) {
+      continue;
+    }
+    final tariff =
+        excursion.tariffs[booking.passengerType] ?? excursion.tariffs['adult'];
+    if (tariff == null) {
+      continue;
+    }
+    final diff = (tariff.priceWithEntry ?? tariff.price) -
+        (tariff.priceWithoutEntry ?? tariff.price);
+    if (diff > 0) {
+      sum += diff;
+    }
+  }
+  return sum;
+}
+
+Color _parseAdminManifestColor(String? color) {
+  if (color == null || color.isEmpty) {
+    return Colors.orange.shade200;
+  }
+  try {
+    return Color(
+      int.parse(color.replaceFirst('#', ''), radix: 16) + 0xFF000000,
+    );
+  } catch (_) {
+    return Colors.orange.shade200;
+  }
+}
+
+Future<Uint8List> _buildManifestPdfBytes({
+  required Excursion excursion,
+  required DateFormat formatter,
+  required bool hasDriverAssigned,
+  required bool hasGuideAssigned,
+}) async {
+  final stops = _buildAdminManifestStops(excursion.busSeats);
+  final transportCost = _resolveAdminStaffCost(
+    excursion,
+    'driver',
+    isAssigned: hasDriverAssigned,
+  );
+  final guideCost = _resolveAdminStaffCost(
+    excursion,
+    'guide',
+    isAssigned: hasGuideAssigned,
+  );
+  final entryTicketsCost = _resolveAdminEntryTicketsCost(excursion);
+  final revenue = _resolveAdminRevenue(excursion);
+  final total = revenue - transportCost - guideCost - entryTicketsCost;
+
+  final pdf = pw.Document();
+  final baseStyle = await TicketGenerator.textStyle(fontSize: 11);
+  final titleStyle = await TicketGenerator.textStyle(
+    fontSize: 20,
+    fontWeight: pw.FontWeight.bold,
+  );
+  final sectionStyle = await TicketGenerator.textStyle(
+    fontSize: 14,
+    fontWeight: pw.FontWeight.bold,
+  );
+  final strongStyle = await TicketGenerator.textStyle(
+    fontSize: 11,
+    fontWeight: pw.FontWeight.bold,
+  );
+  final totalStyle = await TicketGenerator.textStyle(
+    fontSize: 16,
+    fontWeight: pw.FontWeight.bold,
+  );
+
+  pdf.addPage(
+    pw.MultiPage(
+      pageFormat: PdfPageFormat.a4,
+      margin: const pw.EdgeInsets.all(24),
+      build: (context) => [
+        pw.Text(excursion.title, style: titleStyle),
+        pw.SizedBox(height: 4),
+        pw.Text(
+          '${formatter.format(excursion.dateTime)} • мест ${excursion.availableSeatsCount}/${excursion.maxSeats}',
+          style: baseStyle,
+        ),
+        pw.SizedBox(height: 16),
+        if (stops.isEmpty)
+          pw.Container(
+            padding: const pw.EdgeInsets.all(12),
+            decoration: pw.BoxDecoration(
+              border: pw.Border.all(color: PdfColors.grey400),
+              borderRadius: pw.BorderRadius.circular(8),
+            ),
+            child: pw.Text(
+              'Остановки будут показаны после бронирований.',
+              style: baseStyle,
+            ),
+          )
+        else
+          ...stops.map(
+            (stop) => pw.Container(
+              margin: const pw.EdgeInsets.only(bottom: 10),
+              padding: const pw.EdgeInsets.all(12),
+              decoration: pw.BoxDecoration(
+                border: pw.Border.all(color: PdfColors.grey300),
+                borderRadius: pw.BorderRadius.circular(8),
+              ),
+              child: pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                children: [
+                  pw.Row(
+                    mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                    children: [
+                      pw.Expanded(
+                        child: pw.Text(stop.title, style: sectionStyle),
+                      ),
+                      pw.Text('${stop.seats.length} мест', style: strongStyle),
+                    ],
+                  ),
+                  pw.SizedBox(height: 8),
+                  ...stop.sellers.map(
+                    (seller) => pw.Container(
+                      margin: const pw.EdgeInsets.only(bottom: 6),
+                      padding: const pw.EdgeInsets.all(8),
+                      decoration: pw.BoxDecoration(
+                        color: PdfColors.grey100,
+                        borderRadius: pw.BorderRadius.circular(6),
+                      ),
+                      child: pw.Column(
+                        crossAxisAlignment: pw.CrossAxisAlignment.start,
+                        children: [
+                          pw.Text(seller.name, style: strongStyle),
+                          pw.SizedBox(height: 2),
+                          pw.Text(
+                            'Места: ${seller.seats.map((seat) => seat.seatNumber).join(', ')}',
+                            style: baseStyle,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        pw.SizedBox(height: 10),
+        pw.Container(
+          width: double.infinity,
+          padding: const pw.EdgeInsets.all(12),
+          decoration: pw.BoxDecoration(
+            color: PdfColor.fromHex('#EEF8EF'),
+            border: pw.Border.all(color: PdfColor.fromHex('#B8E0B9')),
+            borderRadius: pw.BorderRadius.circular(8),
+          ),
+          child: pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              _manifestPdfRow(
+                  'Транспорт',
+                  '${transportCost.toStringAsFixed(0)} ₽',
+                  baseStyle,
+                  strongStyle),
+              pw.SizedBox(height: 4),
+              _manifestPdfRow('Экскурсовод',
+                  '${guideCost.toStringAsFixed(0)} ₽', baseStyle, strongStyle),
+              pw.SizedBox(height: 4),
+              _manifestPdfRow(
+                  'Входные билеты',
+                  '${entryTicketsCost.toStringAsFixed(0)} ₽',
+                  baseStyle,
+                  strongStyle),
+              pw.SizedBox(height: 8),
+              _manifestPdfRow('Свободные места',
+                  '${excursion.availableSeatsCount}', baseStyle, strongStyle),
+              pw.SizedBox(height: 4),
+              _manifestPdfRow('Выручка', '${revenue.toStringAsFixed(0)} ₽',
+                  baseStyle, strongStyle),
+              pw.SizedBox(height: 8),
+              _manifestPdfRow('Итого', '${total.toStringAsFixed(0)} ₽',
+                  totalStyle, totalStyle),
+            ],
+          ),
+        ),
+      ],
+    ),
+  );
+
+  return pdf.save();
+}
+
+pw.Widget _manifestPdfRow(
+  String label,
+  String value,
+  pw.TextStyle labelStyle,
+  pw.TextStyle valueStyle,
+) {
+  return pw.Row(
+    crossAxisAlignment: pw.CrossAxisAlignment.start,
+    children: [
+      pw.Expanded(child: pw.Text(label, style: labelStyle)),
+      pw.SizedBox(width: 8),
+      pw.Text(value, style: valueStyle, textAlign: pw.TextAlign.right),
+    ],
+  );
 }
 
 class _ExcursionBusesSheet extends ConsumerStatefulWidget {

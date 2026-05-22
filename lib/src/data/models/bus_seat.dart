@@ -22,7 +22,7 @@ class BusSeat {
     final status = json['status'] as String;
     final hasBookingInJson = json['booking'] != null;
     final hasBookedByInfoInJson = json['booked_by_info'] != null;
-    
+
     // Отладка парсинга для занятых мест
     if (status == 'booked') {
       print('📦 ПАРСИНГ Место №$seatNumber из JSON:');
@@ -32,13 +32,14 @@ class BusSeat {
       if (hasBookingInJson) {
         print('   booking данные: ${json['booking']}');
       }
-      print('   booked_by_info в JSON: ${hasBookedByInfoInJson ? "✅ ЕСТЬ" : "❌ НЕТ"}');
+      print(
+          '   booked_by_info в JSON: ${hasBookedByInfoInJson ? "✅ ЕСТЬ" : "❌ НЕТ"}');
       if (hasBookedByInfoInJson) {
         print('   booked_by_info данные: ${json['booked_by_info']}');
       }
       print('');
     }
-    
+
     return BusSeat(
       id: (json['id'] as num?)?.toInt() ?? 0,
       seatNumber: seatNumber,
@@ -52,7 +53,8 @@ class BusSeat {
           : BusSeatBooking.fromJson(json['booking'] as Map<String, dynamic>),
       bookedByInfo: json['booked_by_info'] == null
           ? null
-          : BusSeatBookedByInfo.fromJson(json['booked_by_info'] as Map<String, dynamic>),
+          : BusSeatBookedByInfo.fromJson(
+              json['booked_by_info'] as Map<String, dynamic>),
     );
   }
 }
@@ -62,6 +64,8 @@ class BusSeatBooking {
     required this.customerName,
     required this.customerPhone,
     required this.passengerType,
+    this.price,
+    this.withEntry = false,
     this.debt,
     this.stopId,
     this.stopTitle,
@@ -71,6 +75,8 @@ class BusSeatBooking {
   final String customerName;
   final String customerPhone;
   final String passengerType;
+  final double? price;
+  final bool withEntry;
   final double? debt;
   final int? stopId;
   final String? stopTitle;
@@ -81,6 +87,10 @@ class BusSeatBooking {
       customerName: json['customer_name'] as String? ?? '',
       customerPhone: json['customer_phone'] as String? ?? '',
       passengerType: json['passenger_type'] as String? ?? '',
+      price: json['price'] != null
+          ? double.tryParse(json['price'].toString())
+          : null,
+      withEntry: json['with_entry'] as bool? ?? false,
       debt: json['debt'] != null
           ? double.tryParse(json['debt'].toString())
           : null,

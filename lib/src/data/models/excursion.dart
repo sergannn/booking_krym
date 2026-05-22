@@ -12,6 +12,7 @@ class Excursion {
     required this.time,
     required this.dateTime,
     required this.price,
+    this.actualAmount,
     required this.maxSeats,
     required this.bookedSeatsCount,
     required this.availableSeatsCount,
@@ -34,6 +35,7 @@ class Excursion {
   final String time;
   final DateTime dateTime;
   final double? price;
+  final double? actualAmount;
   final int maxSeats;
   final int bookedSeatsCount;
   final int availableSeatsCount;
@@ -87,6 +89,9 @@ class Excursion {
       dateTime: dateTime,
       price: json['price'] != null
           ? double.tryParse(json['price'].toString())
+          : null,
+      actualAmount: json['actual_amount'] != null
+          ? double.tryParse(json['actual_amount'].toString())
           : null,
       maxSeats: (json['max_seats'] as num?)?.toInt() ?? 0,
       bookedSeatsCount: json['booked_seats_count'] as int? ?? 0,

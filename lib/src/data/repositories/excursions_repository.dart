@@ -33,7 +33,8 @@ class ExcursionsRepository {
         .toList();
   }
 
-  Future<Excursion?> fetchExcursion(int id, {bool includeBookingDetails = false}) async {
+  Future<Excursion?> fetchExcursion(int id,
+      {bool includeBookingDetails = false}) async {
     final query = <String, dynamic>{};
     if (includeBookingDetails) {
       query['include_booking_details'] = true;
@@ -148,6 +149,28 @@ class ExcursionsRepository {
     return Excursion.fromJson(data);
   }
 
+  Future<Excursion> updateActualAmount({
+    required int excursionId,
+    required double? actualAmount,
+  }) async {
+    final response = await _client.putJson(
+      '/api/excursions/$excursionId/actual-amount',
+      authenticated: true,
+      body: {
+        'actual_amount': actualAmount,
+      },
+    );
+
+    final data = response['data'] as Map<String, dynamic>?;
+    if (data == null) {
+      throw const FormatException(
+        'Неверный ответ сервера при обновлении фактической суммы',
+      );
+    }
+
+    return Excursion.fromJson(data);
+  }
+
   Future<Excursion> addUnscheduledDate({
     required int excursionId,
     required DateTime dateTime,
@@ -199,8 +222,8 @@ class ExcursionsRepository {
     }
 
     return data
-        .map((json) => CancelledExcursionDate.fromJson(
-            json as Map<String, dynamic>))
+        .map((json) =>
+            CancelledExcursionDate.fromJson(json as Map<String, dynamic>))
         .toList();
   }
 

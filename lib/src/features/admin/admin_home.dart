@@ -1869,7 +1869,7 @@ class _AdminExcursionCard extends ConsumerWidget {
                           onPressed: (excursion.busSeats.isEmpty ||
                                   excursion.isCancelled)
                               ? null
-                              : () => _showManifestDialog(context),
+                              : () => _showManifestDialog(context, ref),
                         ),
                         IconButton(
                           icon: const Icon(Icons.person_add, size: 20),
@@ -2509,74 +2509,122 @@ class _AdminExcursionCard extends ConsumerWidget {
     );
   }
 
-  Future<void> _showManifestDialog(BuildContext context) async {
+  Future<void> _showManifestDialog(BuildContext context, WidgetRef ref) async {
+    Excursion currentExcursion = excursion;
     await showDialog<void>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        titlePadding: const EdgeInsets.fromLTRB(24, 20, 24, 8),
-        contentPadding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              excursion.title,
-              style: Theme.of(dialogContext).textTheme.titleLarge,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) => AlertDialog(
+          titlePadding: const EdgeInsets.fromLTRB(24, 20, 24, 8),
+          contentPadding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
+          title: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                currentExcursion.title,
+                style: Theme.of(dialogContext).textTheme.titleLarge,
+              ),
+              const SizedBox(height: 4),
+              Text(
+                '${formatter.format(currentExcursion.dateTime)} • мест ${currentExcursion.availableSeatsCount}/${currentExcursion.maxSeats}',
+                style: Theme.of(dialogContext).textTheme.bodySmall?.copyWith(
+                      color: Colors.blueGrey.shade600,
+                    ),
+              ),
+            ],
+          ),
+          content: SizedBox(
+            width: 560,
+            child: SingleChildScrollView(
+              child: _AdminExcursionManifestContent(
+                excursion: currentExcursion,
+                hasDriverAssigned: _driversForSlot.isNotEmpty,
+                hasGuideAssigned: _guidesForSlot.isNotEmpty,
+                onEditActualAmount: () async {
+                  final dialogResult = await _showAdminActualAmountDialog(
+                    dialogContext,
+                    initialAmount: currentExcursion.actualAmount,
+                    revenueFallback: _resolveAdminRevenue(currentExcursion),
+                  );
+
+                  if (dialogResult == null) {
+                    return;
+                  }
+
+                  try {
+                    final updated = await ref
+                        .read(excursionsRepositoryProvider)
+                        .updateActualAmount(
+                          excursionId: currentExcursion.id,
+                          actualAmount: dialogResult.value,
+                        );
+                    if (!dialogContext.mounted) {
+                      return;
+                    }
+                    setDialogState(() {
+                      currentExcursion = updated;
+                    });
+                    ref.invalidate(excursionsFutureProvider);
+                    ScaffoldMessenger.of(dialogContext).showSnackBar(
+                      const SnackBar(
+                        content: Text('Фактическая сумма сохранена'),
+                        behavior: SnackBarBehavior.floating,
+                        margin: EdgeInsets.all(16),
+                      ),
+                    );
+                  } catch (error) {
+                    if (!dialogContext.mounted) {
+                      return;
+                    }
+                    ScaffoldMessenger.of(dialogContext).showSnackBar(
+                      SnackBar(
+                        content: Text('Не удалось сохранить сумму: $error'),
+                        behavior: SnackBarBehavior.floating,
+                        margin: const EdgeInsets.all(16),
+                      ),
+                    );
+                  }
+                },
+              ),
             ),
-            const SizedBox(height: 4),
-            Text(
-              '${formatter.format(excursion.dateTime)} • мест ${excursion.availableSeatsCount}/${excursion.maxSeats}',
-              style: Theme.of(dialogContext).textTheme.bodySmall?.copyWith(
-                    color: Colors.blueGrey.shade600,
-                  ),
+          ),
+          actions: [
+            FilledButton.icon(
+              onPressed: () async {
+                try {
+                  final pdfBytes = await _buildManifestPdfBytes(
+                    excursion: currentExcursion,
+                    formatter: formatter,
+                    hasDriverAssigned: _driversForSlot.isNotEmpty,
+                    hasGuideAssigned: _guidesForSlot.isNotEmpty,
+                  );
+                  await PdfDownloader.saveAndSharePdf(
+                    pdfBytes: pdfBytes,
+                    filename:
+                        'manifest-${currentExcursion.id}-${DateFormat('yyyyMMdd-HHmm').format(currentExcursion.dateTime)}.pdf',
+                  );
+                } catch (error) {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Не удалось сформировать PDF: $error'),
+                        behavior: SnackBarBehavior.floating,
+                        margin: const EdgeInsets.all(16),
+                      ),
+                    );
+                  }
+                }
+              },
+              icon: const Icon(Icons.picture_as_pdf),
+              label: const Text('PDF'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Закрыть'),
             ),
           ],
         ),
-        content: SizedBox(
-          width: 560,
-          child: SingleChildScrollView(
-            child: _AdminExcursionManifestContent(
-              excursion: excursion,
-              hasDriverAssigned: _driversForSlot.isNotEmpty,
-              hasGuideAssigned: _guidesForSlot.isNotEmpty,
-            ),
-          ),
-        ),
-        actions: [
-          FilledButton.icon(
-            onPressed: () async {
-              try {
-                final pdfBytes = await _buildManifestPdfBytes(
-                  excursion: excursion,
-                  formatter: formatter,
-                  hasDriverAssigned: _driversForSlot.isNotEmpty,
-                  hasGuideAssigned: _guidesForSlot.isNotEmpty,
-                );
-                await PdfDownloader.saveAndSharePdf(
-                  pdfBytes: pdfBytes,
-                  filename:
-                      'manifest-${excursion.id}-${DateFormat('yyyyMMdd-HHmm').format(excursion.dateTime)}.pdf',
-                );
-              } catch (error) {
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('Не удалось сформировать PDF: $error'),
-                      behavior: SnackBarBehavior.floating,
-                      margin: const EdgeInsets.all(16),
-                    ),
-                  );
-                }
-              }
-            },
-            icon: const Icon(Icons.picture_as_pdf),
-            label: const Text('PDF'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(),
-            child: const Text('Закрыть'),
-          ),
-        ],
       ),
     );
   }
@@ -2638,11 +2686,13 @@ class _AdminExcursionManifestContent extends StatelessWidget {
     required this.excursion,
     required this.hasDriverAssigned,
     required this.hasGuideAssigned,
+    required this.onEditActualAmount,
   });
 
   final Excursion excursion;
   final bool hasDriverAssigned;
   final bool hasGuideAssigned;
+  final VoidCallback onEditActualAmount;
 
   @override
   Widget build(BuildContext context) {
@@ -2659,7 +2709,8 @@ class _AdminExcursionManifestContent extends StatelessWidget {
     );
     final entryTicketsCost = _resolveAdminEntryTicketsCost(excursion);
     final revenue = _resolveAdminRevenue(excursion);
-    final total = revenue - transportCost - guideCost - entryTicketsCost;
+    final actualAmount = excursion.actualAmount ?? revenue;
+    final total = actualAmount - transportCost - guideCost - entryTicketsCost;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -2794,9 +2845,11 @@ class _AdminExcursionManifestContent extends StatelessWidget {
               ),
               const SizedBox(height: 6),
               _AdminManifestFinanceRow(
-                label: 'Выручка',
-                value: '${revenue.toStringAsFixed(0)} ₽',
-                valueColor: Colors.grey.shade700,
+                label: 'Фактическая сумма',
+                value: '${actualAmount.toStringAsFixed(0)} ₽',
+                valueColor: Colors.blueGrey.shade700,
+                trailingIcon: Icons.edit_outlined,
+                onTap: onEditActualAmount,
               ),
               const SizedBox(height: 10),
               _AdminManifestFinanceRow(
@@ -2818,16 +2871,20 @@ class _AdminManifestFinanceRow extends StatelessWidget {
     required this.value,
     this.valueColor,
     this.isHighlighted = false,
+    this.onTap,
+    this.trailingIcon,
   });
 
   final String label;
   final String value;
   final Color? valueColor;
   final bool isHighlighted;
+  final VoidCallback? onTap;
+  final IconData? trailingIcon;
 
   @override
   Widget build(BuildContext context) {
-    return Row(
+    final row = Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Expanded(
@@ -2842,6 +2899,14 @@ class _AdminManifestFinanceRow extends StatelessWidget {
                 : null,
           ),
         ),
+        if (trailingIcon != null) ...[
+          const SizedBox(width: 8),
+          Icon(
+            trailingIcon,
+            size: 18,
+            color: Colors.blueGrey.shade600,
+          ),
+        ],
         const SizedBox(width: 8),
         Flexible(
           child: Align(
@@ -2866,7 +2931,81 @@ class _AdminManifestFinanceRow extends StatelessWidget {
         ),
       ],
     );
+    if (onTap == null) {
+      return row;
+    }
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 2),
+        child: row,
+      ),
+    );
   }
+}
+
+class _AdminActualAmountDialogResult {
+  const _AdminActualAmountDialogResult(this.value);
+
+  final double? value;
+}
+
+Future<_AdminActualAmountDialogResult?> _showAdminActualAmountDialog(
+  BuildContext context, {
+  required double? initialAmount,
+  required double revenueFallback,
+}) async {
+  final controller = TextEditingController(
+    text: (initialAmount ?? revenueFallback).toStringAsFixed(0),
+  );
+
+  return showDialog<_AdminActualAmountDialogResult?>(
+    context: context,
+    builder: (dialogContext) => AlertDialog(
+      title: const Text('Фактическая сумма'),
+      content: TextField(
+        controller: controller,
+        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+        decoration: const InputDecoration(
+          labelText: 'Сумма',
+          hintText: 'Введите фактическую сумму',
+          suffixText: '₽',
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(dialogContext).pop(),
+          child: const Text('Отмена'),
+        ),
+        TextButton(
+          onPressed: () => Navigator.of(dialogContext).pop(
+            const _AdminActualAmountDialogResult(null),
+          ),
+          child: const Text('Сбросить'),
+        ),
+        FilledButton(
+          onPressed: () {
+            final normalized = controller.text.trim().replaceAll(',', '.');
+            final parsed = double.tryParse(normalized);
+            if (parsed == null || parsed < 0) {
+              ScaffoldMessenger.of(dialogContext).showSnackBar(
+                const SnackBar(
+                  content: Text('Введите корректную неотрицательную сумму'),
+                  behavior: SnackBarBehavior.floating,
+                ),
+              );
+              return;
+            }
+            Navigator.of(dialogContext).pop(
+              _AdminActualAmountDialogResult(parsed),
+            );
+          },
+          child: const Text('Сохранить'),
+        ),
+      ],
+    ),
+  );
 }
 
 class _AdminManifestStopGroup {
@@ -3066,7 +3205,8 @@ Future<Uint8List> _buildManifestPdfBytes({
   );
   final entryTicketsCost = _resolveAdminEntryTicketsCost(excursion);
   final revenue = _resolveAdminRevenue(excursion);
-  final total = revenue - transportCost - guideCost - entryTicketsCost;
+  final actualAmount = excursion.actualAmount ?? revenue;
+  final total = actualAmount - transportCost - guideCost - entryTicketsCost;
 
   final pdf = pw.Document();
   final baseStyle = await TicketGenerator.textStyle(fontSize: 11);
@@ -3188,8 +3328,11 @@ Future<Uint8List> _buildManifestPdfBytes({
               _manifestPdfRow('Свободные места',
                   '${excursion.availableSeatsCount}', baseStyle, strongStyle),
               pw.SizedBox(height: 4),
-              _manifestPdfRow('Выручка', '${revenue.toStringAsFixed(0)} ₽',
-                  baseStyle, strongStyle),
+              _manifestPdfRow(
+                  'Фактическая сумма',
+                  '${actualAmount.toStringAsFixed(0)} ₽',
+                  baseStyle,
+                  strongStyle),
               pw.SizedBox(height: 8),
               _manifestPdfRow('Итого', '${total.toStringAsFixed(0)} ₽',
                   totalStyle, totalStyle),

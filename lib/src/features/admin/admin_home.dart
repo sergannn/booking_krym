@@ -2545,7 +2545,6 @@ class _AdminExcursionCard extends ConsumerWidget {
                   final dialogResult = await _showAdminActualAmountDialog(
                     dialogContext,
                     initialAmount: currentExcursion.actualAmount,
-                    revenueFallback: _resolveAdminRevenue(currentExcursion),
                   );
 
                   if (dialogResult == null) {
@@ -2709,8 +2708,8 @@ class _AdminExcursionManifestContent extends StatelessWidget {
     );
     final entryTicketsCost = _resolveAdminEntryTicketsCost(excursion);
     final revenue = _resolveAdminRevenue(excursion);
-    final actualAmount = excursion.actualAmount ?? revenue;
-    final total = actualAmount - transportCost - guideCost - entryTicketsCost;
+    final actualAmount = excursion.actualAmount;
+    final total = revenue - transportCost - guideCost - entryTicketsCost;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -2846,7 +2845,9 @@ class _AdminExcursionManifestContent extends StatelessWidget {
               const SizedBox(height: 6),
               _AdminManifestFinanceRow(
                 label: 'Фактическая сумма',
-                value: '${actualAmount.toStringAsFixed(0)} ₽',
+                value: actualAmount != null
+                    ? '${actualAmount.toStringAsFixed(0)} ₽'
+                    : '—',
                 valueColor: Colors.blueGrey.shade700,
                 trailingIcon: Icons.edit_outlined,
                 onTap: onEditActualAmount,
@@ -2954,10 +2955,9 @@ class _AdminActualAmountDialogResult {
 Future<_AdminActualAmountDialogResult?> _showAdminActualAmountDialog(
   BuildContext context, {
   required double? initialAmount,
-  required double revenueFallback,
 }) async {
   final controller = TextEditingController(
-    text: (initialAmount ?? revenueFallback).toStringAsFixed(0),
+    text: initialAmount != null ? initialAmount.toStringAsFixed(0) : '',
   );
 
   return showDialog<_AdminActualAmountDialogResult?>(
@@ -3205,8 +3205,8 @@ Future<Uint8List> _buildManifestPdfBytes({
   );
   final entryTicketsCost = _resolveAdminEntryTicketsCost(excursion);
   final revenue = _resolveAdminRevenue(excursion);
-  final actualAmount = excursion.actualAmount ?? revenue;
-  final total = actualAmount - transportCost - guideCost - entryTicketsCost;
+  final actualAmount = excursion.actualAmount;
+  final total = revenue - transportCost - guideCost - entryTicketsCost;
 
   final pdf = pw.Document();
   final baseStyle = await TicketGenerator.textStyle(fontSize: 11);
@@ -3330,7 +3330,9 @@ Future<Uint8List> _buildManifestPdfBytes({
               pw.SizedBox(height: 4),
               _manifestPdfRow(
                   'Фактическая сумма',
-                  '${actualAmount.toStringAsFixed(0)} ₽',
+                  actualAmount != null
+                      ? '${actualAmount.toStringAsFixed(0)} ₽'
+                      : '—',
                   baseStyle,
                   strongStyle),
               pw.SizedBox(height: 8),

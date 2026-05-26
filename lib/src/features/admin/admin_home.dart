@@ -3186,182 +3186,803 @@ Color _parseAdminManifestColor(String? color) {
   }
 }
 
+class _AdminManifestTicketLine {
+  const _AdminManifestTicketLine({
+    required this.label,
+    required this.unitPrice,
+    required this.count,
+  });
+
+  final String label;
+  final double unitPrice;
+  final int count;
+
+  double get total => unitPrice * count;
+}
+
+class _AdminManifestVehicleSummary {
+  const _AdminManifestVehicleSummary({
+    required this.label,
+    required this.busLabel,
+    required this.guideName,
+    required this.totalSeats,
+    required this.bookedSeats,
+    required this.freeSeats,
+    required this.transportCost,
+    required this.guideCost,
+    required this.entryTicketsCost,
+    required this.debt,
+    required this.finalAmount,
+    required this.ticketLines,
+  });
+
+  final String label;
+  final String busLabel;
+  final String guideName;
+  final int totalSeats;
+  final int bookedSeats;
+  final int freeSeats;
+  final double transportCost;
+  final double guideCost;
+  final double entryTicketsCost;
+  final double debt;
+  final double finalAmount;
+  final List<_AdminManifestTicketLine> ticketLines;
+}
+
+String _manifestTargetDate(Excursion excursion) =>
+    DateFormat('yyyy-MM-dd').format(excursion.dateTime);
+
+String _manifestTargetTime(Excursion excursion) =>
+    DateFormat('HH:mm').format(excursion.dateTime);
+
+List<ExcursionStaff> _filterManifestStaffForSlot(Excursion excursion) {
+  final targetDate = _manifestTargetDate(excursion);
+  final targetTime = _manifestTargetTime(excursion);
+
+  return excursion.assignedStaff.where((staff) {
+    final matchesDate =
+        staff.excursionDate == null || staff.excursionDate == targetDate;
+    final matchesTime = staff.time == null || staff.time == targetTime;
+    return matchesDate && matchesTime;
+  }).toList();
+}
+
+List<ExcursionBusAssignment> _filterManifestBusAssignments(
+    Excursion excursion) {
+  final targetDate = _manifestTargetDate(excursion);
+  final targetTime = _manifestTargetTime(excursion);
+
+  return excursion.busAssignments.where((assignment) {
+    final matchesDate = assignment.excursionDate == null ||
+        assignment.excursionDate == targetDate;
+    final matchesTime =
+        assignment.time == null || assignment.time == targetTime;
+    return matchesDate && matchesTime;
+  }).toList()
+    ..sort((a, b) => a.seatFrom.compareTo(b.seatFrom));
+}
+
+List<ExcursionStaff> _manifestGuidesForSlot(Excursion excursion) {
+  final filteredStaff = _filterManifestStaffForSlot(excursion);
+  final realGuides = filteredStaff
+      .where((member) => member.roleInExcursion == 'guide')
+      .toList();
+
+  if (realGuides.isNotEmpty) {
+    return realGuides;
+  }
+
+  return filteredStaff
+      .where((member) => member.roleInExcursion == 'driver')
+      .map((member) => member.asAutoGuideFromDriver())
+      .toList();
+}
+
+double _resolveAdminStaffRate(Excursion excursion, String staffType) {
+  final actualBookedSeats =
+      excursion.busSeats.where((seat) => seat.booking != null).length;
+
+  if (actualBookedSeats <= 0) {
+    return 0;
+  }
+
+  for (final price in excursion.staffPrices) {
+    if (price.staffType != staffType) {
+      continue;
+    }
+    if (actualBookedSeats < price.minPassengers) {
+      continue;
+    }
+    if (price.maxPassengers != null &&
+        actualBookedSeats > price.maxPassengers!) {
+      continue;
+    }
+    return price.price;
+  }
+
+  return 0;
+}
+
+double _resolveAdminSeatEntryAmount(Excursion excursion, BusSeat seat) {
+  final booking = seat.booking;
+  if (booking == null || !booking.withEntry) {
+    return 0;
+  }
+
+  final tariff =
+      excursion.tariffs[booking.passengerType] ?? excursion.tariffs['adult'];
+  if (tariff == null) {
+    return 0;
+  }
+
+  final diff = (tariff.priceWithEntry ?? tariff.price) -
+      (tariff.priceWithoutEntry ?? tariff.price);
+  return diff > 0 ? diff : 0;
+}
+
+String _manifestPassengerShortLabel(String passengerType) {
+  switch (passengerType) {
+    case 'adult':
+      return 'Взр.';
+    case 'senior':
+      return 'Пенс.';
+    case 'child':
+      return 'Дет.';
+    case 'disabled':
+      return 'Инв.';
+    case 'special':
+      return 'Спец.';
+    case 'concession':
+      return 'Льгот.';
+    default:
+      return passengerType.isEmpty ? 'Проч.' : passengerType;
+  }
+}
+
+String _manifestFormatMoney(double value) => value.toStringAsFixed(0);
+
+String _manifestFormatMoneyRub(double value) =>
+    '${_manifestFormatMoney(value)} р';
+
+List<_AdminManifestTicketLine> _buildManifestTicketLines(
+  Excursion excursion,
+  List<BusSeat> seats,
+) {
+  const baseOrder = ['adult', 'senior', 'child', 'disabled'];
+  final extraTypes = <String>{};
+  final lines = <_AdminManifestTicketLine>[];
+
+  for (final type in baseOrder) {
+    final typeSeats = seats.where((seat) {
+      final booking = seat.booking;
+      return booking != null &&
+          booking.withEntry &&
+          booking.passengerType == type;
+    }).toList();
+
+    final unitPrice = typeSeats.isEmpty
+        ? 0.0
+        : _resolveAdminSeatEntryAmount(excursion, typeSeats.first);
+
+    lines.add(
+      _AdminManifestTicketLine(
+        label: _manifestPassengerShortLabel(type),
+        unitPrice: unitPrice,
+        count: typeSeats.length,
+      ),
+    );
+  }
+
+  for (final seat in seats) {
+    final booking = seat.booking;
+    if (booking == null || !booking.withEntry) {
+      continue;
+    }
+    if (!baseOrder.contains(booking.passengerType)) {
+      extraTypes.add(booking.passengerType);
+    }
+  }
+
+  final sortedExtraTypes = extraTypes.toList()..sort();
+  for (final type in sortedExtraTypes) {
+    final typeSeats = seats.where((seat) {
+      final booking = seat.booking;
+      return booking != null &&
+          booking.withEntry &&
+          booking.passengerType == type;
+    }).toList();
+    if (typeSeats.isEmpty) {
+      continue;
+    }
+
+    lines.add(
+      _AdminManifestTicketLine(
+        label: _manifestPassengerShortLabel(type),
+        unitPrice: _resolveAdminSeatEntryAmount(excursion, typeSeats.first),
+        count: typeSeats.length,
+      ),
+    );
+  }
+
+  return lines;
+}
+
+List<_AdminManifestVehicleSummary> _buildManifestVehicleSummaries(
+  Excursion excursion,
+) {
+  final assignments = _filterManifestBusAssignments(excursion);
+  final guides = _manifestGuidesForSlot(excursion);
+  final driverRate = _resolveAdminStaffRate(excursion, 'driver');
+  final guideRate = _resolveAdminStaffRate(excursion, 'guide');
+  final sortedSeats = [...excursion.busSeats]
+    ..sort((a, b) => a.seatNumber.compareTo(b.seatNumber));
+
+  if (assignments.isEmpty) {
+    final bookedSeats =
+        sortedSeats.where((seat) => seat.booking != null).toList();
+    final freeSeats = sortedSeats.where((seat) => seat.booking == null).length;
+    final entryTicketsCost = bookedSeats.fold<double>(
+      0,
+      (sum, seat) => sum + _resolveAdminSeatEntryAmount(excursion, seat),
+    );
+    final debt = bookedSeats.fold<double>(
+      0,
+      (sum, seat) => sum + (seat.booking?.debt ?? 0),
+    );
+    final guideName = guides.isNotEmpty ? guides.first.name : '—';
+
+    return [
+      _AdminManifestVehicleSummary(
+        label: 'Авто1',
+        busLabel: '—',
+        guideName: guideName,
+        totalSeats: excursion.maxSeats,
+        bookedSeats: bookedSeats.length,
+        freeSeats: freeSeats,
+        transportCost: 0,
+        guideCost: guideName == '—' ? 0 : guideRate,
+        entryTicketsCost: entryTicketsCost,
+        debt: debt,
+        finalAmount:
+            entryTicketsCost + (guideName == '—' ? 0 : guideRate) - debt,
+        ticketLines: _buildManifestTicketLines(excursion, bookedSeats),
+      ),
+    ];
+  }
+
+  final summaries = <_AdminManifestVehicleSummary>[];
+  for (var index = 0; index < assignments.length; index++) {
+    final assignment = assignments[index];
+    final seats = sortedSeats.where((seat) {
+      return seat.seatNumber >= assignment.seatFrom &&
+          seat.seatNumber <= assignment.seatTo;
+    }).toList();
+    final bookedSeats = seats.where((seat) => seat.booking != null).toList();
+    final freeSeats = seats.where((seat) => seat.booking == null).length;
+    final entryTicketsCost = bookedSeats.fold<double>(
+      0,
+      (sum, seat) => sum + _resolveAdminSeatEntryAmount(excursion, seat),
+    );
+    final debt = bookedSeats.fold<double>(
+      0,
+      (sum, seat) => sum + (seat.booking?.debt ?? 0),
+    );
+
+    final busParts = <String>[];
+    final busNumber = assignment.bus?.number.trim() ?? '';
+    final busModel = assignment.bus?.model?.trim() ?? '';
+    if (busNumber.isNotEmpty) {
+      busParts.add(busNumber);
+    }
+    if (busModel.isNotEmpty) {
+      busParts.add(busModel);
+    }
+
+    final busLabel = busParts.isNotEmpty ? busParts.join(' · ') : '—';
+    final guideName = index < guides.length ? guides[index].name : '—';
+    final hasDriver = (assignment.driver?.name.trim().isNotEmpty ?? false);
+    final hasGuide = guideName.trim().isNotEmpty && guideName != '—';
+    final totalSeats = assignment.allocatedSeats > 0
+        ? assignment.allocatedSeats
+        : assignment.seatTo - assignment.seatFrom + 1;
+
+    summaries.add(
+      _AdminManifestVehicleSummary(
+        label: 'Авто${index + 1}',
+        busLabel: busLabel,
+        guideName: guideName,
+        totalSeats: totalSeats,
+        bookedSeats: bookedSeats.length,
+        freeSeats: freeSeats,
+        transportCost: hasDriver ? driverRate : 0,
+        guideCost: hasGuide ? guideRate : 0,
+        entryTicketsCost: entryTicketsCost,
+        debt: debt,
+        finalAmount: (hasDriver ? driverRate : 0) +
+            (hasGuide ? guideRate : 0) +
+            entryTicketsCost -
+            debt,
+        ticketLines: _buildManifestTicketLines(excursion, bookedSeats),
+      ),
+    );
+  }
+
+  return summaries;
+}
+
+pw.Widget _manifestPdfTextCell(
+  String text,
+  pw.TextStyle style, {
+  pw.TextAlign textAlign = pw.TextAlign.left,
+  pw.Alignment alignment = pw.Alignment.centerLeft,
+  double padding = 6,
+  int? minLines,
+}) {
+  final lines = text.isEmpty ? [''] : text.split('\n');
+  final lineCount =
+      minLines != null && lines.length < minLines ? minLines : lines.length;
+
+  return pw.Container(
+    alignment: alignment,
+    padding: pw.EdgeInsets.all(padding),
+    child: pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      mainAxisSize: pw.MainAxisSize.min,
+      children: List<pw.Widget>.generate(lineCount, (index) {
+        return pw.Text(
+          index < lines.length ? lines[index] : '',
+          style: style,
+          textAlign: textAlign,
+        );
+      }),
+    ),
+  );
+}
+
+pw.TableRow _manifestPdfSimpleRow(
+  List<pw.Widget> children, {
+  bool isHeader = false,
+}) {
+  return pw.TableRow(
+    decoration:
+        isHeader ? const pw.BoxDecoration(color: PdfColors.grey200) : null,
+    children: children,
+  );
+}
+
 Future<Uint8List> _buildManifestPdfBytes({
   required Excursion excursion,
   required DateFormat formatter,
   required bool hasDriverAssigned,
   required bool hasGuideAssigned,
 }) async {
-  final stops = _buildAdminManifestStops(excursion.busSeats);
-  final transportCost = _resolveAdminStaffCost(
-    excursion,
-    'driver',
-    isAssigned: hasDriverAssigned,
-  );
-  final guideCost = _resolveAdminStaffCost(
-    excursion,
-    'guide',
-    isAssigned: hasGuideAssigned,
-  );
-  final entryTicketsCost = _resolveAdminEntryTicketsCost(excursion);
-  final revenue = _resolveAdminRevenue(excursion);
   final actualAmount = excursion.actualAmount;
-  final total = revenue - transportCost - guideCost - entryTicketsCost;
+  final vehicleSummaries = _buildManifestVehicleSummaries(excursion);
+  final visibleColumnCount =
+      vehicleSummaries.length < 4 ? 4 : vehicleSummaries.length;
+  final bookedSeatsOverall =
+      excursion.busSeats.where((seat) => seat.booking != null).length;
+  final freeSeatsOverall = excursion.availableSeatsCount;
+  final totalPassengers = vehicleSummaries.fold<int>(
+    0,
+    (sum, item) => sum + item.bookedSeats,
+  );
+  final totalTransport = vehicleSummaries.fold<double>(
+    0,
+    (sum, item) => sum + item.transportCost,
+  );
+  final totalGuides = vehicleSummaries.fold<double>(
+    0,
+    (sum, item) => sum + item.guideCost,
+  );
+  final totalEntry = vehicleSummaries.fold<double>(
+    0,
+    (sum, item) => sum + item.entryTicketsCost,
+  );
+  final totalDebt = vehicleSummaries.fold<double>(
+    0,
+    (sum, item) => sum + item.debt,
+  );
+  final totalFinal = vehicleSummaries.fold<double>(
+    0,
+    (sum, item) => sum + item.finalAmount,
+  );
+  final totalChange = actualAmount != null ? actualAmount - totalFinal : null;
 
   final pdf = pw.Document();
-  final baseStyle = await TicketGenerator.textStyle(fontSize: 11);
+  final baseStyle = await TicketGenerator.textStyle(fontSize: 9);
   final titleStyle = await TicketGenerator.textStyle(
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: pw.FontWeight.bold,
   );
   final sectionStyle = await TicketGenerator.textStyle(
-    fontSize: 14,
+    fontSize: 10,
     fontWeight: pw.FontWeight.bold,
   );
   final strongStyle = await TicketGenerator.textStyle(
-    fontSize: 11,
+    fontSize: 9,
     fontWeight: pw.FontWeight.bold,
   );
   final totalStyle = await TicketGenerator.textStyle(
-    fontSize: 16,
+    fontSize: 10,
     fontWeight: pw.FontWeight.bold,
   );
 
+  List<String> vehicleCellText(
+    String Function(_AdminManifestVehicleSummary item) builder,
+  ) {
+    return List<String>.generate(visibleColumnCount, (index) {
+      if (index >= vehicleSummaries.length) {
+        return '';
+      }
+      return builder(vehicleSummaries[index]);
+    });
+  }
+
+  final summaryColumnWidths = <int, pw.TableColumnWidth>{
+    0: const pw.FlexColumnWidth(1.55),
+    for (var i = 1; i <= visibleColumnCount; i++)
+      i: const pw.FlexColumnWidth(1),
+    visibleColumnCount + 1: const pw.FlexColumnWidth(1.05),
+  };
+
   pdf.addPage(
     pw.MultiPage(
-      pageFormat: PdfPageFormat.a4,
+      pageFormat: PdfPageFormat.a4.landscape,
       margin: const pw.EdgeInsets.all(24),
       build: (context) => [
-        pw.Text(excursion.title, style: titleStyle),
-        pw.SizedBox(height: 4),
         pw.Text(
-          '${formatter.format(excursion.dateTime)} • мест ${excursion.availableSeatsCount}/${excursion.maxSeats}',
+          '${formatter.format(excursion.dateTime)} — ${excursion.title}',
+          style: titleStyle,
+        ),
+        pw.SizedBox(height: 6),
+        pw.Text(
+          'Мест: $bookedSeatsOverall/${excursion.maxSeats}',
           style: baseStyle,
         ),
         pw.SizedBox(height: 16),
-        if (stops.isEmpty)
-          pw.Container(
-            padding: const pw.EdgeInsets.all(12),
-            decoration: pw.BoxDecoration(
-              border: pw.Border.all(color: PdfColors.grey400),
-              borderRadius: pw.BorderRadius.circular(8),
+        pw.Table(
+          border: pw.TableBorder.all(color: PdfColors.black, width: 0.7),
+          children: [
+            _manifestPdfSimpleRow([
+              _manifestPdfTextCell(
+                'Авто1: ${vehicleSummaries.isNotEmpty ? vehicleSummaries[0].busLabel : ''}',
+                strongStyle,
+              ),
+              _manifestPdfTextCell(
+                'Экскурсовод 1: ${vehicleSummaries.isNotEmpty ? vehicleSummaries[0].guideName : ''}',
+                strongStyle,
+              ),
+            ]),
+            _manifestPdfSimpleRow([
+              _manifestPdfTextCell(
+                'Авто2: ${vehicleSummaries.length > 1 ? vehicleSummaries[1].busLabel : ''}',
+                strongStyle,
+              ),
+              _manifestPdfTextCell(
+                'Экскурсовод 2: ${vehicleSummaries.length > 1 ? vehicleSummaries[1].guideName : ''}',
+                strongStyle,
+              ),
+            ]),
+            if (vehicleSummaries.length > 2)
+              ...List<pw.TableRow>.generate(
+                vehicleSummaries.length - 2,
+                (offset) {
+                  final index = offset + 2;
+                  final item = vehicleSummaries[index];
+                  return _manifestPdfSimpleRow([
+                    _manifestPdfTextCell(
+                      'Авто${index + 1}: ${item.busLabel}',
+                      strongStyle,
+                    ),
+                    _manifestPdfTextCell(
+                      'Экскурсовод ${index + 1}: ${item.guideName}',
+                      strongStyle,
+                    ),
+                  ]);
+                },
+              ),
+          ],
+        ),
+        pw.SizedBox(height: 12),
+        pw.Table(
+          border: pw.TableBorder.all(color: PdfColors.black, width: 0.7),
+          children: [
+            _manifestPdfSimpleRow([
+              _manifestPdfTextCell(
+                'Кол-во чел общ: $totalPassengers',
+                strongStyle,
+              ),
+              _manifestPdfTextCell('Св. места: $freeSeatsOverall', strongStyle),
+              ...List<pw.Widget>.generate(visibleColumnCount, (index) {
+                if (index >= vehicleSummaries.length) {
+                  return _manifestPdfTextCell('', baseStyle);
+                }
+                final item = vehicleSummaries[index];
+                return _manifestPdfTextCell(
+                  '${item.label}: ${item.bookedSeats} чел, св. места: ${item.freeSeats}',
+                  baseStyle,
+                );
+              }),
+            ]),
+          ],
+        ),
+        pw.SizedBox(height: 12),
+        pw.Table(
+          border: pw.TableBorder.all(color: PdfColors.black, width: 0.7),
+          columnWidths: summaryColumnWidths,
+          children: [
+            _manifestPdfSimpleRow(
+              [
+                _manifestPdfTextCell('', strongStyle),
+                ...List<pw.Widget>.generate(
+                  visibleColumnCount,
+                  (index) => _manifestPdfTextCell(
+                    'Авто${index + 1}',
+                    strongStyle,
+                    textAlign: pw.TextAlign.center,
+                    alignment: pw.Alignment.center,
+                  ),
+                ),
+                _manifestPdfTextCell(
+                  'Итог',
+                  strongStyle,
+                  textAlign: pw.TextAlign.center,
+                  alignment: pw.Alignment.center,
+                ),
+              ],
+              isHeader: true,
             ),
+            _manifestPdfSimpleRow([
+              _manifestPdfTextCell('Транспорт', baseStyle),
+              ...vehicleCellText(
+                  (item) => _manifestFormatMoney(item.transportCost)).map(
+                (value) => _manifestPdfTextCell(
+                  value,
+                  baseStyle,
+                  textAlign: pw.TextAlign.center,
+                  alignment: pw.Alignment.center,
+                ),
+              ),
+              _manifestPdfTextCell(
+                _manifestFormatMoneyRub(totalTransport),
+                strongStyle,
+                textAlign: pw.TextAlign.center,
+                alignment: pw.Alignment.center,
+              ),
+            ]),
+            _manifestPdfSimpleRow([
+              _manifestPdfTextCell('Экскурсовод', baseStyle),
+              ...vehicleCellText((item) => _manifestFormatMoney(item.guideCost))
+                  .map(
+                (value) => _manifestPdfTextCell(
+                  value,
+                  baseStyle,
+                  textAlign: pw.TextAlign.center,
+                  alignment: pw.Alignment.center,
+                ),
+              ),
+              _manifestPdfTextCell(
+                _manifestFormatMoneyRub(totalGuides),
+                strongStyle,
+                textAlign: pw.TextAlign.center,
+                alignment: pw.Alignment.center,
+              ),
+            ]),
+            _manifestPdfSimpleRow([
+              _manifestPdfTextCell('Входные билеты', baseStyle),
+              ...vehicleCellText(
+                (item) => _manifestFormatMoneyRub(item.entryTicketsCost),
+              ).map(
+                (value) => _manifestPdfTextCell(
+                  value,
+                  baseStyle,
+                  textAlign: pw.TextAlign.center,
+                  alignment: pw.Alignment.center,
+                ),
+              ),
+              _manifestPdfTextCell(
+                _manifestFormatMoneyRub(totalEntry),
+                strongStyle,
+                textAlign: pw.TextAlign.center,
+                alignment: pw.Alignment.center,
+              ),
+            ]),
+            _manifestPdfSimpleRow([
+              _manifestPdfTextCell('Кол-во чел', baseStyle),
+              ...vehicleCellText((item) => '${item.bookedSeats}').map(
+                (value) => _manifestPdfTextCell(
+                  value,
+                  baseStyle,
+                  textAlign: pw.TextAlign.center,
+                  alignment: pw.Alignment.center,
+                ),
+              ),
+              _manifestPdfTextCell(
+                '$totalPassengers',
+                strongStyle,
+                textAlign: pw.TextAlign.center,
+                alignment: pw.Alignment.center,
+              ),
+            ]),
+            _manifestPdfSimpleRow([
+              _manifestPdfTextCell('Свободные места', baseStyle),
+              ...vehicleCellText((item) => '${item.freeSeats}').map(
+                (value) => _manifestPdfTextCell(
+                  value,
+                  baseStyle,
+                  textAlign: pw.TextAlign.center,
+                  alignment: pw.Alignment.center,
+                ),
+              ),
+              _manifestPdfTextCell(
+                '$freeSeatsOverall',
+                strongStyle,
+                textAlign: pw.TextAlign.center,
+                alignment: pw.Alignment.center,
+              ),
+            ]),
+            _manifestPdfSimpleRow([
+              _manifestPdfTextCell('Долги', baseStyle),
+              ...vehicleCellText((item) => _manifestFormatMoney(item.debt)).map(
+                (value) => _manifestPdfTextCell(
+                  value,
+                  baseStyle,
+                  textAlign: pw.TextAlign.center,
+                  alignment: pw.Alignment.center,
+                ),
+              ),
+              _manifestPdfTextCell(
+                _manifestFormatMoneyRub(totalDebt),
+                strongStyle,
+                textAlign: pw.TextAlign.center,
+                alignment: pw.Alignment.center,
+              ),
+            ]),
+            _manifestPdfSimpleRow([
+              _manifestPdfTextCell('Итоговая сумма', baseStyle),
+              ...vehicleCellText(
+                (item) => _manifestFormatMoneyRub(item.finalAmount),
+              ).map(
+                (value) => _manifestPdfTextCell(
+                  value,
+                  baseStyle,
+                  textAlign: pw.TextAlign.center,
+                  alignment: pw.Alignment.center,
+                ),
+              ),
+              _manifestPdfTextCell(
+                _manifestFormatMoneyRub(totalFinal),
+                totalStyle,
+                textAlign: pw.TextAlign.center,
+                alignment: pw.Alignment.center,
+              ),
+            ]),
+            _manifestPdfSimpleRow([
+              _manifestPdfTextCell('Выданная сумма', baseStyle),
+              ...List<pw.Widget>.generate(
+                visibleColumnCount,
+                (index) => _manifestPdfTextCell(
+                  '',
+                  baseStyle,
+                  textAlign: pw.TextAlign.center,
+                  alignment: pw.Alignment.center,
+                ),
+              ),
+              _manifestPdfTextCell(
+                actualAmount != null
+                    ? _manifestFormatMoneyRub(actualAmount)
+                    : '—',
+                strongStyle,
+                textAlign: pw.TextAlign.center,
+                alignment: pw.Alignment.center,
+              ),
+            ]),
+            _manifestPdfSimpleRow([
+              _manifestPdfTextCell('Сдача', baseStyle),
+              ...List<pw.Widget>.generate(
+                visibleColumnCount,
+                (index) => _manifestPdfTextCell(
+                  '',
+                  baseStyle,
+                  textAlign: pw.TextAlign.center,
+                  alignment: pw.Alignment.center,
+                ),
+              ),
+              _manifestPdfTextCell(
+                totalChange != null
+                    ? _manifestFormatMoneyRub(totalChange)
+                    : '—',
+                strongStyle,
+                textAlign: pw.TextAlign.center,
+                alignment: pw.Alignment.center,
+              ),
+            ]),
+          ],
+        ),
+        pw.SizedBox(height: 12),
+        pw.Table(
+          border: pw.TableBorder.all(color: PdfColors.black, width: 0.7),
+          children: [
+            _manifestPdfSimpleRow(
+              [
+                _manifestPdfTextCell(
+                  'Входные билеты',
+                  sectionStyle,
+                  textAlign: pw.TextAlign.center,
+                  alignment: pw.Alignment.center,
+                ),
+              ],
+              isHeader: true,
+            ),
+          ],
+        ),
+        pw.Table(
+          border: pw.TableBorder.all(color: PdfColors.black, width: 0.7),
+          columnWidths: {
+            for (var i = 0; i < visibleColumnCount; i++)
+              i: const pw.FlexColumnWidth(1),
+          },
+          children: [
+            _manifestPdfSimpleRow(
+              List<pw.Widget>.generate(
+                visibleColumnCount,
+                (index) => _manifestPdfTextCell(
+                  'Авто${index + 1}',
+                  strongStyle,
+                  textAlign: pw.TextAlign.center,
+                  alignment: pw.Alignment.center,
+                ),
+              ),
+              isHeader: true,
+            ),
+            _manifestPdfSimpleRow(
+              List<pw.Widget>.generate(visibleColumnCount, (index) {
+                if (index >= vehicleSummaries.length) {
+                  return _manifestPdfTextCell('', baseStyle, minLines: 7);
+                }
+                final item = vehicleSummaries[index];
+                final buffer = StringBuffer();
+                for (final line in item.ticketLines) {
+                  buffer.writeln(
+                    '${line.label} ${_manifestFormatMoney(line.unitPrice)} × ${line.count} = ${_manifestFormatMoney(line.total)}',
+                  );
+                }
+                buffer.writeln();
+                buffer.write(
+                  'Итого входных: ${_manifestFormatMoneyRub(item.entryTicketsCost)}',
+                );
+                return _manifestPdfTextCell(
+                  buffer.toString(),
+                  baseStyle,
+                  minLines: 7,
+                );
+              }),
+            ),
+          ],
+        ),
+        if (!hasDriverAssigned && !hasGuideAssigned)
+          pw.Padding(
+            padding: const pw.EdgeInsets.only(top: 10),
             child: pw.Text(
-              'Остановки будут показаны после бронирований.',
+              'Примечание: для этой экскурсии не назначены водитель и экскурсовод.',
               style: baseStyle,
             ),
           )
-        else
-          ...stops.map(
-            (stop) => pw.Container(
-              margin: const pw.EdgeInsets.only(bottom: 10),
-              padding: const pw.EdgeInsets.all(12),
-              decoration: pw.BoxDecoration(
-                border: pw.Border.all(color: PdfColors.grey300),
-                borderRadius: pw.BorderRadius.circular(8),
-              ),
-              child: pw.Column(
-                crossAxisAlignment: pw.CrossAxisAlignment.start,
-                children: [
-                  pw.Row(
-                    mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                    children: [
-                      pw.Expanded(
-                        child: pw.Text(stop.title, style: sectionStyle),
-                      ),
-                      pw.Text('${stop.seats.length} мест', style: strongStyle),
-                    ],
-                  ),
-                  pw.SizedBox(height: 8),
-                  ...stop.sellers.map(
-                    (seller) => pw.Container(
-                      margin: const pw.EdgeInsets.only(bottom: 6),
-                      padding: const pw.EdgeInsets.all(8),
-                      decoration: pw.BoxDecoration(
-                        color: PdfColors.grey100,
-                        borderRadius: pw.BorderRadius.circular(6),
-                      ),
-                      child: pw.Column(
-                        crossAxisAlignment: pw.CrossAxisAlignment.start,
-                        children: [
-                          pw.Text(seller.name, style: strongStyle),
-                          pw.SizedBox(height: 2),
-                          pw.Text(
-                            'Места: ${seller.seats.map((seat) => seat.seatNumber).join(', ')}',
-                            style: baseStyle,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+        else if (!hasDriverAssigned || !hasGuideAssigned)
+          pw.Padding(
+            padding: const pw.EdgeInsets.only(top: 10),
+            child: pw.Text(
+              'Примечание: часть данных по персоналу отсутствует, поэтому некоторые ячейки оставлены пустыми.',
+              style: baseStyle,
             ),
           ),
-        pw.SizedBox(height: 10),
-        pw.Container(
-          width: double.infinity,
-          padding: const pw.EdgeInsets.all(12),
-          decoration: pw.BoxDecoration(
-            color: PdfColor.fromHex('#EEF8EF'),
-            border: pw.Border.all(color: PdfColor.fromHex('#B8E0B9')),
-            borderRadius: pw.BorderRadius.circular(8),
-          ),
-          child: pw.Column(
-            crossAxisAlignment: pw.CrossAxisAlignment.start,
-            children: [
-              _manifestPdfRow(
-                  'Транспорт',
-                  '${transportCost.toStringAsFixed(0)} ₽',
-                  baseStyle,
-                  strongStyle),
-              pw.SizedBox(height: 4),
-              _manifestPdfRow('Экскурсовод',
-                  '${guideCost.toStringAsFixed(0)} ₽', baseStyle, strongStyle),
-              pw.SizedBox(height: 4),
-              _manifestPdfRow(
-                  'Входные билеты',
-                  '${entryTicketsCost.toStringAsFixed(0)} ₽',
-                  baseStyle,
-                  strongStyle),
-              pw.SizedBox(height: 8),
-              _manifestPdfRow('Свободные места',
-                  '${excursion.availableSeatsCount}', baseStyle, strongStyle),
-              pw.SizedBox(height: 4),
-              _manifestPdfRow(
-                  'Фактическая сумма',
-                  actualAmount != null
-                      ? '${actualAmount.toStringAsFixed(0)} ₽'
-                      : '—',
-                  baseStyle,
-                  strongStyle),
-              pw.SizedBox(height: 8),
-              _manifestPdfRow('Итого', '${total.toStringAsFixed(0)} ₽',
-                  totalStyle, totalStyle),
-            ],
-          ),
-        ),
       ],
     ),
   );
 
   return pdf.save();
-}
-
-pw.Widget _manifestPdfRow(
-  String label,
-  String value,
-  pw.TextStyle labelStyle,
-  pw.TextStyle valueStyle,
-) {
-  return pw.Row(
-    crossAxisAlignment: pw.CrossAxisAlignment.start,
-    children: [
-      pw.Expanded(child: pw.Text(label, style: labelStyle)),
-      pw.SizedBox(width: 8),
-      pw.Text(value, style: valueStyle, textAlign: pw.TextAlign.right),
-    ],
-  );
 }
 
 class _ExcursionBusesSheet extends ConsumerStatefulWidget {

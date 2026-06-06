@@ -17,6 +17,7 @@ import '../../data/models/saved_ticket.dart';
 import '../common/widgets/cancellation_reason_dialog.dart';
 import '../admin/widgets/prices_tab.dart';
 import '../common/settings_screen.dart';
+import '../excursions/widgets/excursion_gallery_dialog.dart';
 import 'tickets_screen.dart';
 import '../../core/services/internet_connection_service.dart';
 
@@ -489,6 +490,17 @@ class _ExcursionTile extends ConsumerWidget {
               ),
             ),
             const SizedBox(width: 4),
+            IconButton(
+              icon: const Icon(Icons.photo_library_outlined, size: 20),
+              tooltip: 'Фотографии экскурсии',
+              padding: const EdgeInsets.all(8),
+              constraints: const BoxConstraints(),
+              onPressed: () => showExcursionGalleryDialog(
+                context: context,
+                ref: ref,
+                excursion: excursion,
+              ),
+            ),
             // IconButton(
             //   icon: const Icon(Icons.event_seat, size: 20),
             //       tooltip: 'Забронировать',

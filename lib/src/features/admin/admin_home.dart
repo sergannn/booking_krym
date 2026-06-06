@@ -31,6 +31,7 @@ import 'widgets/seat_permissions_tab.dart';
 import 'widgets/seat_access_requests_tab.dart';
 import 'widgets/buses_tab.dart';
 import '../common/settings_screen.dart';
+import '../excursions/widgets/excursion_gallery_dialog.dart';
 import '../../core/services/internet_connection_service.dart';
 
 enum StaffIndicatorMode { combined, split }
@@ -1524,7 +1525,7 @@ class _ExcursionsTableHeader extends StatelessWidget {
   static const int titleFlex = 9;
   static const int driverFlex = 3;
   static const int guideFlex = 3;
-  static const double actionsWidth = 156;
+  static const double actionsWidth = 196;
 
   @override
   Widget build(BuildContext context) {
@@ -1824,6 +1825,18 @@ class _AdminExcursionCard extends ConsumerWidget {
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.end,
                       children: [
+                        IconButton(
+                          icon: const Icon(Icons.photo_library_outlined,
+                              size: 20),
+                          tooltip: 'Фотографии экскурсии',
+                          padding: const EdgeInsets.all(8),
+                          constraints: const BoxConstraints(),
+                          onPressed: () => showExcursionGalleryDialog(
+                            context: context,
+                            ref: ref,
+                            excursion: excursion,
+                          ),
+                        ),
                         if (1 == 2)
                           IconButton(
                             icon: const Icon(Icons.directions_bus, size: 20),

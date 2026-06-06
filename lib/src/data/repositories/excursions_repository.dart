@@ -1,6 +1,7 @@
 import '../../core/api/api_client.dart';
 import '../../core/api/api_helpers.dart';
 import '../models/excursion.dart';
+import '../models/excursion_photo.dart';
 
 class ExcursionsRepository {
   ExcursionsRepository(this._client);
@@ -49,6 +50,22 @@ class ExcursionsRepository {
       return null;
     }
     return Excursion.fromJson(data as Map<String, dynamic>);
+  }
+
+  Future<List<ExcursionPhoto>> fetchExcursionPhotos(int id) async {
+    final response = await _client.getJson(
+      '/api/excursions/$id/photos',
+      authenticated: true,
+    );
+    final data = response['data'] as List<dynamic>?;
+    if (data == null) {
+      return const [];
+    }
+
+    return data
+        .map((json) => ExcursionPhoto.fromJson(json as Map<String, dynamic>))
+        .where((photo) => photo.imageUrl.isNotEmpty)
+        .toList();
   }
 
   Future<Excursion> createExcursion({
